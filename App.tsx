@@ -617,16 +617,7 @@ function App() {
         onConvert={initiateConvert}
         showLineNumbers={showLineNumbers}
         setShowLineNumbers={setShowLineNumbers}
-        isRenaming={isRenaming}
-        renameValue={renameValue}
-        setRenameValue={setRenameValue}
-        saveRename={saveRename}
-        handleRenameKeyDown={handleRenameKeyDown}
-        startRenaming={startRenaming}
-        onSave={() => handleSaveFile()}
-        onSaveAsCopy={() => handleSaveAsCopy(undefined, false)}
-        isFavorite={isCurrentFileFavorite}
-        onToggleFavorite={toggleCurrentFileFavorite}
+        activeView={activeView}
         onOpenHistory={() => setActiveView('history')}
       />
 
@@ -639,7 +630,15 @@ function App() {
             stats={stats}
             onLoadFile={handleLoadFileFromPath}
             isFavorite={isCurrentFileFavorite} 
-            onToggleFavorite={toggleCurrentFileFavorite} 
+            onToggleFavorite={toggleCurrentFileFavorite}
+            onSave={() => handleSaveFile()}
+            onSaveAsCopy={() => handleSaveAsCopy(undefined, false)}
+            isRenaming={isRenaming}
+            renameValue={renameValue}
+            setRenameValue={setRenameValue}
+            saveRename={saveRename}
+            handleRenameKeyDown={handleRenameKeyDown}
+            startRenaming={startRenaming}
           />
         )}
 

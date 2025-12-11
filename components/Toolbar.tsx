@@ -49,6 +49,7 @@ interface ToolbarProps {
   setShowLineNumbers?: (show: boolean) => void;
   
   // New Navigation
+  activeView: 'home' | 'editor' | 'history';
   onOpenHistory: () => void;
 }
 
@@ -73,6 +74,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onConvert,
   showLineNumbers = true,
   setShowLineNumbers,
+  activeView,
   onOpenHistory
 }) => {
   const [showConvertMenu, setShowConvertMenu] = useState(false);
@@ -105,6 +107,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
     }
   };
 
+  const isHistoryView = activeView === 'history';
+
   return (
     <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 relative z-30">
       {/* Single Toolbar Row */}
@@ -130,8 +134,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
           </div>
         </div>
 
-        {/* GROUP 2: View Controls & Search (Center) */}
-        {activeFile && (
+        {/* GROUP 2: View Controls & Search (Center) - HIDDEN IN HISTORY VIEW */}
+        {activeFile && !isHistoryView && (
           <div className="flex items-center gap-3 flex-1 justify-center max-w-2xl no-drag px-4">
             {/* View Toggle */}
             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg shrink-0">
@@ -165,7 +169,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
         {/* GROUP 3: Tools & Global Actions (Right) */}
         <div className="flex items-center gap-2 no-drag shrink-0 justify-end">
-          {activeFile && (
+          {activeFile && !isHistoryView && (
             <>
                {/* Convert Menu */}
               <div className="relative">
@@ -244,7 +248,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
           <div className="flex items-center gap-1">
             <button
               onClick={onOpenHistory}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className={`p-1.5 rounded-lg transition-colors ${
+                isHistoryView 
+                  ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-300' 
+                  : 'text-slate-400 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
               title="History"
             >
               <History size={18} />
