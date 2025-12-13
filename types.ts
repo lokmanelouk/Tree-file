@@ -1,4 +1,3 @@
-
 export type JsonValue = string | number | boolean | null | JsonObject | JsonArray;
 
 export type JsonObject = {
@@ -7,7 +6,7 @@ export type JsonObject = {
 
 export type JsonArray = JsonValue[];
 
-export type FileFormat = 'json' | 'yaml' | 'xml';
+export type FileFormat = 'json' | 'yaml' | 'xml' | 'csv';
 
 export interface FileMetaData {
   name: string;
@@ -15,6 +14,11 @@ export interface FileMetaData {
   type: string;
   lastModified: number;
   itemCount: number;
+}
+
+export interface FileHistory {
+  snapshots: string[];
+  currentIndex: number;
 }
 
 export interface EditorFile {
@@ -27,6 +31,7 @@ export interface EditorFile {
   isDirty: boolean;
   meta: FileMetaData;
   error?: string | null;
+  history: FileHistory;
 }
 
 export type SortOrder = 'original' | 'asc' | 'desc';
@@ -47,6 +52,7 @@ export interface HistoryItem {
   path: string;
   format: FileFormat;
   lastOpened: string;
+  size?: number;
 }
 
 // Electron API Definition

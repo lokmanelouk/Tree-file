@@ -1,5 +1,7 @@
+
 import yaml from 'js-yaml';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
+import Papa from 'papaparse';
 import { JsonValue, FileFormat } from '../types';
 
 /**
@@ -9,6 +11,7 @@ export const detectFormat = (filename: string): FileFormat => {
   const lower = filename.toLowerCase();
   if (lower.endsWith('.yaml') || lower.endsWith('.yml')) return 'yaml';
   if (lower.endsWith('.xml')) return 'xml';
+  if (lower.endsWith('.csv')) return 'csv';
   return 'json';
 };
 
@@ -36,6 +39,24 @@ export const parseContent = (content: string, format: FileFormat): JsonValue => 
       } catch (e) {
          throw new Error("Invalid XML structure");
       }
+
+    case 'csv':
+      const result = Papa.parse(content, {
+        header: true,
+        dynamicTyping: true,
+        skipEmptyLines: true
+      });
+      
+      // Filter out "UndetectableDelimiter" which is often just a warning defaulting to comma
+      const realErrors = result.errors.filter(e => 
+        e.code !== 'UndetectableDelimiter' && 
+        !e.message.includes("Unable to auto-detect delimiting character")
+      );
+
+      if (realErrors.length > 0) {
+        throw new Error(`Invalid CSV: ${realErrors[0].message}`);
+      }
+      return result.data as JsonValue;
     
     case 'json':
     default:
@@ -58,6 +79,19 @@ export const stringifyContent = (data: JsonValue, format: FileFormat): string =>
         attributeNamePrefix: "@_"
       });
       return builder.build(data);
+
+    case 'csv':
+      try {
+        let csvData = data;
+        // Papa.unparse expects array of objects or array of arrays. 
+        // If data is a single object, wrap it.
+        if (data !== null && typeof data === 'object' && !Array.isArray(data)) {
+           csvData = [data];
+        }
+        return Papa.unparse(csvData as any, { quotes: true });
+      } catch (e) {
+        return '';
+      }
     
     case 'json':
     default:
@@ -71,8 +105,7 @@ export const stringifyContent = (data: JsonValue, format: FileFormat): string =>
 export const minifyContent = (data: JsonValue, format: FileFormat): string => {
   switch (format) {
     case 'yaml':
-      // YAML cannot be truly minified to a single line without losing structure or becoming JSON flow-style.
-      // We return the standard dump, effectively disabling "minify" for YAML.
+      // YAML cannot be truly minified to a single line without losing structure.
       return yaml.dump(data);
     
     case 'xml':
@@ -83,6 +116,10 @@ export const minifyContent = (data: JsonValue, format: FileFormat): string => {
       });
       return builder.build(data);
     
+    case 'csv':
+       // CSV minification just means standard CSV (lines are required)
+       return Papa.unparse(data as any, { quotes: false });
+
     case 'json':
     default:
       return JSON.stringify(data);

@@ -1,11 +1,11 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Plus, 
   X, 
   FileJson,
   FileCode,
-  Database
+  Database,
+  FileSpreadsheet
 } from 'lucide-react';
 import Home from './components/Home'; 
 import Sidebar from './components/Sidebar'; 
@@ -47,6 +47,7 @@ function App() {
   // --- Refs ---
   const renameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null); // Ref for search input
 
   // --- Rename State ---
   const [isRenaming, setIsRenaming] = useState(false);
@@ -109,14 +110,32 @@ function App() {
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+O or Cmd+O to open file
       if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
         e.preventDefault();
         handleTriggerOpenFile();
       }
+      // Ctrl+F or Cmd+F to focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+        }
+      }
+      // Undo (Ctrl+Z)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+      // Redo (Ctrl+Y or Ctrl+Shift+Z)
+      if (((e.ctrlKey || e.metaKey) && e.key === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        handleRedo();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [activeFileId, files]); // Re-bind if files change for undo context
 
   const activeFile = useMemo(() => files.find(f => f.id === activeFileId), [files, activeFileId]);
 
@@ -130,7 +149,7 @@ function App() {
   }, [activeFile?.json, sortOrder]);
 
   const stats = useMemo(() => {
-    if (!activeFile?.json) return { totalNodes: 0, maxDepth: 0 };
+    if (!activeFile?.json) return { totalNodes: 0, maxDepth: 0, objects: 0, arrays: 0, primitives: 0 };
     return getJsonStats(activeFile.json);
   }, [activeFile?.json]);
 
@@ -141,6 +160,7 @@ function App() {
          case 'json': colorClass = "text-yellow-500 dark:text-yellow-400"; break;
          case 'yaml': colorClass = "text-indigo-500 dark:text-indigo-400"; break;
          case 'xml': colorClass = "text-orange-500 dark:text-orange-400"; break;
+         case 'csv': colorClass = "text-green-500 dark:text-green-400"; break;
          default: colorClass = "text-blue-500";
        }
     }
@@ -150,7 +170,92 @@ function App() {
       case 'json': return <FileJson size={size} className={finalClass} />;
       case 'yaml': return <Database size={size} className={finalClass} />;
       case 'xml': return <FileCode size={size} className={finalClass} />;
+      case 'csv': return <FileSpreadsheet size={size} className={finalClass} />;
       default: return <FileJson size={size} className={finalClass} />;
+    }
+  };
+
+  const addToHistory = (file: EditorFile, newText: string): EditorFile => {
+    // Determine the new history state
+    const currentHist = file.history || { snapshots: [file.text], currentIndex: 0 };
+    
+    // If we are not at the end, discard future states
+    const past = currentHist.snapshots.slice(0, currentHist.currentIndex + 1);
+    
+    // Add new state
+    const nextSnapshots = [...past, newText];
+    
+    // Limit history size to 50
+    if (nextSnapshots.length > 50) {
+      nextSnapshots.shift();
+    }
+
+    const nextIndex = nextSnapshots.length - 1;
+
+    return {
+      ...file,
+      history: {
+        snapshots: nextSnapshots,
+        currentIndex: nextIndex
+      }
+    };
+  };
+
+  const handleUndo = () => {
+    if (!activeFile) return;
+    const { history } = activeFile;
+    if (history.currentIndex > 0) {
+      const prevIndex = history.currentIndex - 1;
+      const prevText = history.snapshots[prevIndex];
+      
+      let prevJson = activeFile.json;
+      let error = null;
+      try {
+        prevJson = parseContent(prevText, activeFile.format);
+      } catch (e: any) {
+        error = e.message;
+      }
+
+      updateActiveFile(f => ({
+        ...f,
+        text: prevText,
+        json: error ? prevJson : prevJson, // If error, keep old json to avoid crash, but text updates
+        error,
+        history: {
+          ...f.history,
+          currentIndex: prevIndex
+        },
+        isDirty: true
+      }));
+    }
+  };
+
+  const handleRedo = () => {
+    if (!activeFile) return;
+    const { history } = activeFile;
+    if (history.currentIndex < history.snapshots.length - 1) {
+      const nextIndex = history.currentIndex + 1;
+      const nextText = history.snapshots[nextIndex];
+
+      let nextJson = activeFile.json;
+      let error = null;
+      try {
+        nextJson = parseContent(nextText, activeFile.format);
+      } catch (e: any) {
+        error = e.message;
+      }
+
+      updateActiveFile(f => ({
+        ...f,
+        text: nextText,
+        json: error ? nextJson : nextJson,
+        error,
+        history: {
+          ...f.history,
+          currentIndex: nextIndex
+        },
+        isDirty: true
+      }));
     }
   };
 
@@ -180,7 +285,11 @@ function App() {
       json,
       text,
       isDirty: false,
-      meta: { name, size, type: format, lastModified: Date.now(), itemCount: 0 }
+      meta: { name, size, type: format, lastModified: Date.now(), itemCount: 0 },
+      history: {
+        snapshots: [text],
+        currentIndex: 0
+      }
     };
     setFiles(prev => [...prev, newFile]);
     setActiveFileId(newFile.id);
@@ -245,6 +354,17 @@ function App() {
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+      
+      // Basic check
+      const validExtensions = ['.json', '.yaml', '.yml', '.xml', '.csv'];
+      const fileName = file.name.toLowerCase();
+      const isValid = validExtensions.some(ext => fileName.endsWith(ext));
+
+      if (!isValid) {
+        alert(`Unsupported file type: ${file.name}. Please use JSON, YAML, XML, or CSV.`);
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = (ev) => {
         try {
@@ -304,7 +424,11 @@ function App() {
     try {
       const updatedJson = updateValueAtPath(activeFile.json, path, newValue);
       const newText = stringifyContent(updatedJson, activeFile.format);
-      updateActiveFile(f => ({ ...f, json: updatedJson, text: newText, isDirty: true }));
+      
+      updateActiveFile(f => {
+        const updatedFile = { ...f, json: updatedJson, text: newText, isDirty: true };
+        return addToHistory(updatedFile, newText);
+      });
     } catch (e) {
       console.error("Failed to update value", e);
     }
@@ -312,6 +436,10 @@ function App() {
 
   const handleRawChange = (newText: string) => {
     if (!activeFile) return;
+    // Don't update history on every keystroke here, potentially debouncing is better,
+    // but for now, we will add to history on every change for "step by step" accuracy.
+    // Optimization: In a real app, debounce history updates.
+    
     updateActiveFile(f => {
       let newJson = f.json;
       let error = null;
@@ -320,13 +448,18 @@ function App() {
       } catch (e: any) {
         error = e.message;
       }
-      return {
+      const updatedFile = {
         ...f,
         text: newText,
         json: error ? f.json : newJson, 
         isDirty: true,
         error
       };
+      
+      // If we want every character to be a step, use addToHistory.
+      // If we want less steps, we might need a timeout.
+      // Implementing strict "previous step" means recording this change.
+      return addToHistory(updatedFile, newText);
     });
   };
 
@@ -335,7 +468,10 @@ function App() {
     try {
       const currentObj = parseContent(activeFile.text, activeFile.format);
       const formatted = stringifyContent(currentObj, activeFile.format);
-      updateActiveFile(f => ({ ...f, text: formatted, json: currentObj, error: null, isDirty: true }));
+      updateActiveFile(f => {
+        // CHANGED: Do not call addToHistory for formatting changes
+        return { ...f, text: formatted, json: currentObj, error: null, isDirty: true };
+      });
     } catch (e: any) {
       alert("Cannot format: Invalid syntax.");
     }
@@ -347,7 +483,10 @@ function App() {
     try {
       const currentObj = parseContent(activeFile.text, activeFile.format);
       const minified = minifyContent(currentObj, activeFile.format);
-      updateActiveFile(f => ({ ...f, text: minified, json: currentObj, error: null, isDirty: true }));
+      updateActiveFile(f => {
+        // CHANGED: Do not call addToHistory for minification changes
+        return { ...f, text: minified, json: currentObj, error: null, isDirty: true };
+      });
     } catch (e: any) {
       alert("Cannot minify: Invalid syntax.");
     }
@@ -362,23 +501,43 @@ function App() {
     
     try {
       const newText = stringifyContent(activeFile.json, pendingFormat);
+      
+      // Check for empty CSV result
+      if (pendingFormat === 'csv' && (!newText || newText.trim() === '')) {
+        alert("Conversion Warning: Resulting CSV is empty. Ensure your data structure is compatible with CSV (e.g. array of flat objects).");
+        setPendingFormat(null);
+        return;
+      }
+
       let newName = activeFile.name;
       const parts = newName.split('.');
       if (parts.length > 1) {
         parts[parts.length - 1] = pendingFormat === 'yaml' ? 'yaml' : pendingFormat === 'xml' ? 'xml' : 'json';
+        if (pendingFormat === 'csv') {
+           // Basic check for CSV compatibility extension
+           parts[parts.length - 1] = 'csv';
+        }
         newName = parts.join('.');
       } else {
         newName = `${newName}.${pendingFormat}`;
       }
 
-      updateActiveFile(f => ({
-        ...f,
-        format: pendingFormat,
-        text: newText,
-        name: newName,
-        isDirty: true,
-        error: null 
-      }));
+      updateActiveFile(f => {
+        const updated = {
+          ...f,
+          format: pendingFormat,
+          text: newText,
+          name: newName,
+          isDirty: true,
+          error: null,
+          // CHANGED: Reset history on conversion as it invalidates previous format snapshots
+          history: {
+            snapshots: [newText],
+            currentIndex: 0
+          }
+        };
+        return updated;
+      });
       
       setViewMode('raw');
       
@@ -386,6 +545,23 @@ function App() {
       alert(`Conversion Failed: ${e.message}`);
     } finally {
       setPendingFormat(null);
+    }
+  };
+
+  const handleExportToJson = async () => {
+    if (!activeFile) return;
+    try {
+      // Always export as JSON
+      const jsonContent = stringifyContent(activeFile.json, 'json');
+      const jsonName = activeFile.name.replace(/\.[^/.]+$/, "") + ".json";
+      
+      if (window.electron) {
+         await window.electron.saveFileAs(jsonName, jsonContent, 'json');
+      } else {
+         downloadJson(activeFile.json, jsonName);
+      }
+    } catch (e) {
+      alert("Export failed.");
     }
   };
 
@@ -516,16 +692,10 @@ function App() {
   };
 
   // --- Favorite Logic ---
-  const toggleCurrentFileFavorite = async () => {
-    if (activeFile && activeFile.path && window.electron) {
-      const item: HistoryItem = {
-        name: activeFile.name,
-        path: activeFile.path,
-        format: activeFile.format,
-        lastOpened: new Date().toISOString()
-      };
-      
+  const handleToggleFavorite = async (item: HistoryItem) => {
+    if (window.electron) {
       const isCurrentlyFav = favorites.some(f => f.path === item.path);
+      // Optimistic update
       if (isCurrentlyFav) {
         setFavorites(prev => prev.filter(f => f.path !== item.path));
       } else {
@@ -541,6 +711,18 @@ function App() {
            window.electron.getFavorites().then(setFavorites);
         }
       }
+    }
+  };
+
+  const toggleCurrentFileFavorite = () => {
+    if (activeFile && activeFile.path) {
+      const item: HistoryItem = {
+        name: activeFile.name,
+        path: activeFile.path,
+        format: activeFile.format,
+        lastOpened: new Date().toISOString()
+      };
+      handleToggleFavorite(item);
     }
   };
 
@@ -588,12 +770,16 @@ function App() {
                    <FileCode size={24} className="text-orange-500 dark:text-orange-400" />
                    <span className="text-xs font-medium">XML</span>
                 </button>
+                <button onClick={() => createNewFile('csv')} className="flex flex-col items-center gap-2 p-4 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/20 border border-slate-200 dark:border-slate-700 hover:border-green-500 transition-all w-24">
+                   <FileSpreadsheet size={24} className="text-green-500 dark:text-green-400" />
+                   <span className="text-xs font-medium">CSV</span>
+                </button>
              </div>
           </div>
         </div>
       )}
 
-      <input type="file" ref={fileInputRef} onChange={handleFileInputChange} className="hidden" accept=".json,.yaml,.yml,.xml,application/json,text/yaml,text/xml" />
+      <input type="file" ref={fileInputRef} onChange={handleFileInputChange} className="hidden" accept=".json,.yaml,.yml,.xml,.csv,application/json,text/yaml,text/xml,text/csv" />
 
       {/* TOOLBAR */}
       <Toolbar 
@@ -619,6 +805,12 @@ function App() {
         setShowLineNumbers={setShowLineNumbers}
         activeView={activeView}
         onOpenHistory={() => setActiveView('history')}
+        onExportJson={handleExportToJson}
+        searchInputRef={searchInputRef}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={!!activeFile?.history && activeFile.history.currentIndex > 0}
+        canRedo={!!activeFile?.history && activeFile.history.currentIndex < activeFile.history.snapshots.length - 1}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -631,6 +823,7 @@ function App() {
             onLoadFile={handleLoadFileFromPath}
             isFavorite={isCurrentFileFavorite} 
             onToggleFavorite={toggleCurrentFileFavorite}
+            favorites={favorites}
             onSave={() => handleSaveFile()}
             onSaveAsCopy={() => handleSaveAsCopy(undefined, false)}
             isRenaming={isRenaming}
@@ -652,6 +845,9 @@ function App() {
                   if (files.length > 0) setActiveView('editor');
                   else setActiveView('home');
                 }} 
+                favorites={favorites}
+                onToggleFavorite={handleToggleFavorite}
+                activeFilePath={activeFile?.path}
              />
           ) : (
             <>

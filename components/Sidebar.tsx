@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { 
   Layers, 
   Plus, 
@@ -15,18 +15,24 @@ import {
   ChevronRight,
   Pencil,
   Save,
-  Check
+  Check,
+  FileSpreadsheet,
+  Box,
+  Braces,
+  Type
 } from 'lucide-react';
 import { EditorFile, FileFormat, HistoryItem } from '../types';
+import { JsonStats } from '../utils/jsonUtils';
 
 interface SidebarProps {
   activeFile: EditorFile | undefined;
   onNewFile: () => void;
   onOpenFile: () => void;
-  stats: { totalNodes: number; maxDepth: number };
+  stats: JsonStats;
   onLoadFile?: (path: string, name: string) => void;
   isFavorite?: boolean; 
   onToggleFavorite?: () => void;
+  favorites: HistoryItem[];
   
   // File Control Props
   onSave?: () => void;
@@ -47,6 +53,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onLoadFile,
   isFavorite,
   onToggleFavorite,
+  favorites,
   onSave,
   onSaveAsCopy,
   isRenaming,
@@ -56,14 +63,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   handleRenameKeyDown,
   startRenaming
 }) => {
-  const [favorites, setFavorites] = useState<HistoryItem[]>([]);
   const [showFavorites, setShowFavorites] = useState(true);
-
-  useEffect(() => {
-    if (window.electron) {
-      window.electron.getFavorites().then(setFavorites);
-    }
-  }, [activeFile, isFavorite]); 
 
   const handleFavoriteClick = (item: HistoryItem) => {
     if (onLoadFile) {
@@ -78,6 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({
          case 'json': colorClass = "text-yellow-500 dark:text-yellow-400"; break;
          case 'yaml': colorClass = "text-indigo-500 dark:text-indigo-400"; break;
          case 'xml': colorClass = "text-orange-500 dark:text-orange-400"; break;
+         case 'csv': colorClass = "text-green-500 dark:text-green-400"; break;
          default: colorClass = "text-blue-500";
        }
     }
@@ -87,6 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       case 'json': return <FileJson size={size} className={finalClass} />;
       case 'yaml': return <Database size={size} className={finalClass} />;
       case 'xml': return <FileCode size={size} className={finalClass} />;
+      case 'csv': return <FileSpreadsheet size={size} className={finalClass} />;
       default: return <FileJson size={size} className={finalClass} />;
     }
   };
@@ -94,14 +96,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside className="w-64 bg-gray-100 dark:bg-slate-900/50 border-r border-slate-300 dark:border-slate-800 flex flex-col px-4 pb-4 pt-4 gap-4 backdrop-blur-sm transition-all duration-300">
       <div className="flex items-center justify-between">
-        <h2 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+        <h2 className="text-xs font-bold text-slate-700 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
           <Layers size={12} /> Explorer
         </h2>
         <div className="flex items-center gap-1">
-          <button onClick={onNewFile} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400" title="New File">
+          <button onClick={onNewFile} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400" title="New File">
             <Plus size={16} />
           </button>
-          <button onClick={onOpenFile} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400" title="Open File (Ctrl+O)">
+          <button onClick={onOpenFile} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400" title="Open File (Ctrl+O)">
             <FolderOpen size={16} />
           </button>
         </div>
@@ -126,7 +128,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         />
                     </div>
                  ) : (
-                    <span className="font-semibold text-sm truncate text-slate-700 dark:text-slate-200 select-all" title={activeFile.name}>
+                    <span className="font-semibold text-sm truncate text-slate-800 dark:text-slate-200 select-all" title={activeFile.name}>
                        {activeFile.name}
                     </span>
                  )}
@@ -155,7 +157,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     startRenaming && (
                       <button 
                         onClick={startRenaming} 
-                        className="text-slate-400 hover:text-blue-500 p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors" 
+                        className="text-slate-500 hover:text-blue-500 p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors" 
                         title="Rename File"
                       >
                         <Pencil size={14} />
@@ -183,29 +185,61 @@ const Sidebar: React.FC<SidebarProps> = ({
              </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col gap-2 shadow-sm animate-in slide-in-from-left-2 duration-300">
-              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-1"><Hash size={12} /> Statistics</h3>
+          <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col gap-3 shadow-sm animate-in slide-in-from-left-2 duration-300">
+              <h3 className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1"><Hash size={12} /> Structure</h3>
+              
               <div className="grid grid-cols-2 gap-2">
-                <div className="col-span-2 flex items-center justify-between px-3 py-1.5 bg-slate-50 dark:bg-slate-700/50 rounded border border-slate-100 dark:border-slate-700">
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">Format</span>
+                <div className="col-span-2 flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors rounded border border-slate-100 dark:border-slate-700">
+                  <div className="flex items-center gap-2">
+                     <span className="text-[10px] text-slate-600 dark:text-slate-400 uppercase font-bold">Type</span>
+                  </div>
                   <span className="font-mono text-xs font-bold text-blue-500 uppercase">{activeFile.format}</span>
                 </div>
-                <div className="flex flex-col items-center p-1.5 bg-slate-50 dark:bg-slate-700/50 rounded border border-slate-100 dark:border-slate-700">
-                  <span className="text-[9px] text-slate-400 uppercase">Nodes</span>
-                  <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-200">{stats.totalNodes}</span>
+
+                <div className="flex flex-col gap-1 p-2 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors rounded border border-slate-100 dark:border-slate-700">
+                  <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                    <Box size={10} />
+                    <span className="text-[9px] uppercase">Objects</span>
+                  </div>
+                  <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-200">{stats.objects}</span>
                 </div>
-                <div className="flex flex-col items-center p-1.5 bg-slate-50 dark:bg-slate-700/50 rounded border border-slate-100 dark:border-slate-700">
-                  <span className="text-[9px] text-slate-400 uppercase">Depth</span>
-                  <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-200">{stats.maxDepth}</span>
+                
+                <div className="flex flex-col gap-1 p-2 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors rounded border border-slate-100 dark:border-slate-700">
+                  <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                    <Braces size={10} />
+                    <span className="text-[9px] uppercase">Arrays</span>
+                  </div>
+                  <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-200">{stats.arrays}</span>
                 </div>
+
+                <div className="flex flex-col gap-1 p-2 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors rounded border border-slate-100 dark:border-slate-700">
+                  <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                    <Type size={10} />
+                    <span className="text-[9px] uppercase">Primitives</span>
+                  </div>
+                  <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-200">{stats.primitives}</span>
+                </div>
+
+                <div className="flex flex-col gap-1 p-2 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors rounded border border-slate-100 dark:border-slate-700">
+                  <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                    <Layers size={10} />
+                    <span className="text-[9px] uppercase">Depth</span>
+                  </div>
+                  <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-200">{stats.maxDepth}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors rounded border border-slate-100 dark:border-slate-700">
+                 <span className="text-[9px] text-slate-600 dark:text-slate-400 uppercase font-bold">Total Nodes</span>
+                 <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-300">{stats.totalNodes}</span>
               </div>
           </div>
         </>
       ) : (
         <div className="flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800/50">
-          <FilePlus size={32} className="text-slate-300 dark:text-slate-600 mb-3" />
+          <FilePlus size={32} className="text-slate-400 dark:text-slate-600 mb-3" />
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">No active file</h3>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">Open or create a file to get started</p>
+          <p className="text-xs text-slate-500 dark:text-slate-500 mb-4">Open or create a file to get started</p>
           <button 
             onClick={onNewFile}
             className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium transition-colors shadow-sm flex items-center justify-center gap-2"
@@ -221,7 +255,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div className="border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/30 rounded-lg overflow-hidden">
             <button 
               onClick={() => setShowFavorites(!showFavorites)}
-              className="w-full flex items-center justify-between p-3 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors"
+              className="w-full flex items-center justify-between p-3 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors"
             >
               <div className="flex items-center gap-2">
                 <Star size={12} className="text-yellow-500" /> Favorites
@@ -234,7 +268,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <button 
                     key={i} 
                     onClick={() => handleFavoriteClick(fav)}
-                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700/50 text-xs text-slate-600 dark:text-slate-300 transition-colors text-left"
+                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-xs text-slate-700 dark:text-slate-300 transition-colors text-left"
                     title={fav.path}
                   >
                     {getFileIcon(fav.format, 12)}
@@ -247,8 +281,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         <div className="p-3 border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/30 rounded-lg">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><Info size={12} /> Tips</h3>
-          <ul className="text-xs text-slate-500 dark:text-slate-400 space-y-2 list-disc pl-4 leading-relaxed">
+          <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><Info size={12} /> Tips</h3>
+          <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-2 list-disc pl-4 leading-relaxed">
             <li><span className="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded text-[10px] font-bold">Ctrl+O</span> to Open</li>
             <li><span className="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded text-[10px] font-bold">Ctrl+F</span> to Search</li>
             <li>Convert formats via Toolbar</li>

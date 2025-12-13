@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { JsonValue, ViewSettings, Path, OnUpdateValue } from '../types';
 import { ChevronRight, ChevronDown, Edit2, Check, X } from 'lucide-react';
@@ -13,6 +14,8 @@ interface JsonNodeProps {
   onUpdate?: OnUpdateValue;
   searchTerm: string;
   depth: number;
+  onContextMenu?: (e: React.MouseEvent, path: Path, value: JsonValue, name: string | number) => void;
+  isSelected?: boolean;
 }
 
 const HighlightText: React.FC<{ text: string; term: string }> = ({ text, term }) => {
@@ -43,7 +46,9 @@ const JsonNode: React.FC<JsonNodeProps> = ({
   path, 
   onUpdate,
   searchTerm,
-  depth
+  depth,
+  onContextMenu,
+  isSelected
 }) => {
   const matchesSearch = useMemo(() => hasSearchMatch(value, searchTerm), [value, searchTerm]);
   const nameMatches = String(name).toLowerCase().includes(searchTerm.toLowerCase());
@@ -55,7 +60,6 @@ const JsonNode: React.FC<JsonNodeProps> = ({
 
   const [expanded, setExpanded] = useState<boolean>(shouldExpand);
 
-  // Effect: When settings.expandedLevel changes (e.g. Collapse/Expand All button), update state.
   useEffect(() => {
     setExpanded(shouldExpand);
   }, [settings.expandedLevel, shouldExpand]);
@@ -98,6 +102,14 @@ const JsonNode: React.FC<JsonNodeProps> = ({
     if (e.key === 'Escape') setIsEditing(false);
   };
 
+  const handleRightClick = (e: React.MouseEvent) => {
+    if (onContextMenu) {
+      e.stopPropagation(); // Stop bubbling so only the clicked node triggers menu
+      e.preventDefault();
+      onContextMenu(e, path, value, name);
+    }
+  };
+
   const isPrimitive = value === null || typeof value !== 'object';
   const isArray = Array.isArray(value);
   const isEmpty = isArray ? value.length === 0 : (value && Object.keys(value).length === 0);
@@ -121,8 +133,16 @@ const JsonNode: React.FC<JsonNodeProps> = ({
   return (
     <div className="font-mono text-[13px] leading-6">
       <div 
-        className={`group flex items-center hover:bg-slate-200 dark:hover:bg-slate-800/50 rounded-sm whitespace-pre transition-colors ${matchesSearch && searchTerm ? 'bg-yellow-100 dark:bg-slate-800/30' : ''}`}
+        className={`group flex items-center rounded-sm whitespace-pre transition-colors cursor-pointer 
+          ${isSelected 
+            ? 'bg-blue-100 dark:bg-blue-900/30' // Selected state (Context Menu Open)
+            : (matchesSearch && searchTerm) 
+              ? 'bg-yellow-100 dark:bg-slate-800/30' 
+              : 'hover:bg-slate-200 dark:hover:bg-slate-800/50'
+          }
+        `}
         onClick={!isPrimitive ? toggleExpand : undefined}
+        onContextMenu={handleRightClick}
       >
         <span className="text-slate-500 dark:text-slate-500 font-normal select-none">{prefix}{connector}</span>
         {!isPrimitive && !isEmpty ? (
@@ -181,6 +201,8 @@ const JsonNode: React.FC<JsonNodeProps> = ({
                 onUpdate={onUpdate}
                 searchTerm={searchTerm}
                 depth={depth + 1}
+                onContextMenu={onContextMenu}
+                isSelected={isSelected} // Propagating selected state (could be refined to check path match)
               />
             ))
           ) : (
@@ -196,6 +218,8 @@ const JsonNode: React.FC<JsonNodeProps> = ({
                 onUpdate={onUpdate}
                 searchTerm={searchTerm}
                 depth={depth + 1}
+                onContextMenu={onContextMenu}
+                isSelected={isSelected} // Propagating selected state
               />
             ))
           )}

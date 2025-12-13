@@ -1,4 +1,13 @@
+
 import { JsonValue, JsonObject, JsonArray, SortOrder, Path } from '../types';
+
+export interface JsonStats {
+  totalNodes: number;
+  maxDepth: number;
+  objects: number;
+  arrays: number;
+  primitives: number;
+}
 
 /**
  * Checks if a value contains the search query recursively.
@@ -118,27 +127,38 @@ export const safeStringify = (data: JsonValue): string => {
   }
 };
 
-interface JsonStats {
-  totalNodes: number;
-  maxDepth: number;
-}
-
-export const getJsonStats = (data: JsonValue, currentDepth = 1): JsonStats => {
-  let stats = { totalNodes: 1, maxDepth: currentDepth }; // 1 for self
+export const getJsonStats = (data: JsonValue, currentDepth = 0): JsonStats => {
+  let stats: JsonStats = {
+    totalNodes: 1,
+    maxDepth: currentDepth,
+    objects: 0,
+    arrays: 0,
+    primitives: 0
+  };
 
   if (Array.isArray(data)) {
+    stats.arrays = 1;
     data.forEach(item => {
-      const childStats = getJsonStats(item, currentDepth + 1);
-      stats.totalNodes += childStats.totalNodes;
-      stats.maxDepth = Math.max(stats.maxDepth, childStats.maxDepth);
+      const child = getJsonStats(item, currentDepth + 1);
+      stats.totalNodes += child.totalNodes;
+      stats.maxDepth = Math.max(stats.maxDepth, child.maxDepth);
+      stats.objects += child.objects;
+      stats.arrays += child.arrays;
+      stats.primitives += child.primitives;
     });
   } else if (data !== null && typeof data === 'object') {
-    Object.values(data).forEach(val => {
-      const childStats = getJsonStats(val, currentDepth + 1);
-      stats.totalNodes += childStats.totalNodes;
-      stats.maxDepth = Math.max(stats.maxDepth, childStats.maxDepth);
+    stats.objects = 1;
+    Object.values(data).forEach(item => {
+      const child = getJsonStats(item, currentDepth + 1);
+      stats.totalNodes += child.totalNodes;
+      stats.maxDepth = Math.max(stats.maxDepth, child.maxDepth);
+      stats.objects += child.objects;
+      stats.arrays += child.arrays;
+      stats.primitives += child.primitives;
     });
+  } else {
+    stats.primitives = 1;
   }
-
+  
   return stats;
 };

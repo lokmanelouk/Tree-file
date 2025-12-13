@@ -3,23 +3,25 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Plus, 
   X, 
-  FileJson,
-  FileCode,
-  Database
+  FileJson, 
+  FileCode, 
+  Database, 
+  FileSpreadsheet
 } from 'lucide-react';
-import Home from './components/Home'; 
-import Sidebar from './components/Sidebar'; 
-import CodeEditor from './components/CodeEditor';
-import Toolbar from './components/Toolbar';
-import TreeViewer from './components/TreeViewer';
-import HistoryPage from './components/HistoryPage';
-import ConfirmModal from './components/ConfirmModal';
-import ConversionConfirmModal from './components/ConversionConfirmModal';
-import { sortJson, getJsonStats, updateValueAtPath, downloadJson } from './utils/jsonUtils';
-import { detectFormat, parseContent, stringifyContent, minifyContent } from './utils/parserUtils';
+import Home from './Home'; 
+import Sidebar from './Sidebar'; 
+import CodeEditor from './CodeEditor';
+import Toolbar from './Toolbar';
+import TreeViewer from './TreeViewer';
+import HistoryPage from './HistoryPage';
+import ComparePage from './ComparePage';
+import ConfirmModal from './ConfirmModal';
+import ConversionConfirmModal from './ConversionConfirmModal';
+import { sortJson, getJsonStats, updateValueAtPath, downloadJson } from '../utils/jsonUtils';
+import { detectFormat, parseContent, stringifyContent, minifyContent } from '../utils/parserUtils';
 import { JsonValue, EditorFile, SortOrder, ViewSettings, Path, FileFormat, HistoryItem } from './types';
 
-type ViewState = 'home' | 'editor' | 'history';
+type ViewState = 'home' | 'editor' | 'history' | 'compare';
 
 function App() {
   // --- Global State ---
@@ -47,6 +49,7 @@ function App() {
   // --- Refs ---
   const renameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // --- Rename State ---
   const [isRenaming, setIsRenaming] = useState(false);
@@ -63,6 +66,9 @@ function App() {
 
   // --- Copy Feedback State ---
   const [copySuccess, setCopySuccess] = useState(false);
+
+  // --- Drag & Drop State ---
+  const [draggedFileId, setDraggedFileId] = useState<string | null>(null);
 
   // --- Effects ---
   useEffect(() => {
@@ -109,14 +115,32 @@ function App() {
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+O
       if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
         e.preventDefault();
         handleTriggerOpenFile();
       }
+      // Ctrl+F
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+        }
+      }
+      // Undo (Ctrl+Z)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+      // Redo (Ctrl+Y or Ctrl+Shift+Z)
+      if (((e.ctrlKey || e.metaKey) && e.key === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        handleRedo();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [activeFileId, files]);
 
   const activeFile = useMemo(() => files.find(f => f.id === activeFileId), [files, activeFileId]);
 
@@ -130,7 +154,7 @@ function App() {
   }, [activeFile?.json, sortOrder]);
 
   const stats = useMemo(() => {
-    if (!activeFile?.json) return { totalNodes: 0, maxDepth: 0 };
+    if (!activeFile?.json) return { totalNodes: 0, maxDepth: 0, objects: 0, arrays: 0, primitives: 0 };
     return getJsonStats(activeFile.json);
   }, [activeFile?.json]);
 
@@ -141,6 +165,7 @@ function App() {
          case 'json': colorClass = "text-yellow-500 dark:text-yellow-400"; break;
          case 'yaml': colorClass = "text-indigo-500 dark:text-indigo-400"; break;
          case 'xml': colorClass = "text-orange-500 dark:text-orange-400"; break;
+         case 'csv': colorClass = "text-green-500 dark:text-green-400"; break;
          default: colorClass = "text-blue-500";
        }
     }
@@ -150,6 +175,7 @@ function App() {
       case 'json': return <FileJson size={size} className={finalClass} />;
       case 'yaml': return <Database size={size} className={finalClass} />;
       case 'xml': return <FileCode size={size} className={finalClass} />;
+      case 'csv': return <FileSpreadsheet size={size} className={finalClass} />;
       default: return <FileJson size={size} className={finalClass} />;
     }
   };
@@ -158,6 +184,7 @@ function App() {
     const format = detectFormat(name);
     let text = rawContent;
     let json = loadedData;
+    let fileSize = size;
 
     if (rawContent && Object.keys(loadedData).length === 0) {
        try {
@@ -172,6 +199,10 @@ function App() {
       text = stringifyContent(json, format);
     }
 
+    if (fileSize === 0 && text) {
+        fileSize = new Blob([text]).size;
+    }
+
     const newFile: EditorFile = {
       id: crypto.randomUUID(),
       name,
@@ -180,11 +211,15 @@ function App() {
       json,
       text,
       isDirty: false,
-      meta: { name, size, type: format, lastModified: Date.now(), itemCount: 0 }
+      meta: { name, size: fileSize, type: format, lastModified: Date.now(), itemCount: 0 },
+      history: {
+        snapshots: [text],
+        currentIndex: 0
+      }
     };
     setFiles(prev => [...prev, newFile]);
     setActiveFileId(newFile.id);
-    setActiveView('editor'); // Switch to editor view
+    setActiveView('editor'); 
 
     if (!text || text.trim().length === 0) {
       setViewMode('raw');
@@ -287,7 +322,7 @@ function App() {
         setActiveFileId(newFiles[nextIndex].id);
       } else {
         setActiveFileId(null);
-        setActiveView('home'); // Go to home if no files
+        setActiveView('home'); 
       }
     } else if (newFiles.length === 0) {
       setActiveView('home');
@@ -299,12 +334,40 @@ function App() {
     setFiles(prev => prev.map(f => f.id === activeFileId ? updater(f) : f));
   };
 
+  const addToHistory = (file: EditorFile, newText: string): EditorFile => {
+    const currentHist = file.history || { snapshots: [file.text], currentIndex: 0 };
+    const past = currentHist.snapshots.slice(0, currentHist.currentIndex + 1);
+    const nextSnapshots = [...past, newText];
+    if (nextSnapshots.length > 50) {
+      nextSnapshots.shift();
+    }
+    const nextIndex = nextSnapshots.length - 1;
+    return {
+      ...file,
+      history: {
+        snapshots: nextSnapshots,
+        currentIndex: nextIndex
+      }
+    };
+  };
+
   const handleUpdateValue = (path: Path, newValue: JsonValue) => {
     if (!activeFile) return;
     try {
       const updatedJson = updateValueAtPath(activeFile.json, path, newValue);
       const newText = stringifyContent(updatedJson, activeFile.format);
-      updateActiveFile(f => ({ ...f, json: updatedJson, text: newText, isDirty: true }));
+      const newSize = new Blob([newText]).size;
+      
+      updateActiveFile(f => {
+        const updatedFile = { 
+            ...f, 
+            json: updatedJson, 
+            text: newText, 
+            isDirty: true,
+            meta: { ...f.meta, size: newSize }
+        };
+        return addToHistory(updatedFile, newText);
+      });
     } catch (e) {
       console.error("Failed to update value", e);
     }
@@ -312,6 +375,8 @@ function App() {
 
   const handleRawChange = (newText: string) => {
     if (!activeFile) return;
+    const newSize = new Blob([newText]).size;
+    
     updateActiveFile(f => {
       let newJson = f.json;
       let error = null;
@@ -320,13 +385,15 @@ function App() {
       } catch (e: any) {
         error = e.message;
       }
-      return {
+      const updatedFile = {
         ...f,
         text: newText,
         json: error ? f.json : newJson, 
         isDirty: true,
-        error
+        error,
+        meta: { ...f.meta, size: newSize }
       };
+      return addToHistory(updatedFile, newText);
     });
   };
 
@@ -335,7 +402,8 @@ function App() {
     try {
       const currentObj = parseContent(activeFile.text, activeFile.format);
       const formatted = stringifyContent(currentObj, activeFile.format);
-      updateActiveFile(f => ({ ...f, text: formatted, json: currentObj, error: null, isDirty: true }));
+      const newSize = new Blob([formatted]).size;
+      updateActiveFile(f => ({ ...f, text: formatted, json: currentObj, error: null, isDirty: true, meta: { ...f.meta, size: newSize } }));
     } catch (e: any) {
       alert("Cannot format: Invalid syntax.");
     }
@@ -347,7 +415,8 @@ function App() {
     try {
       const currentObj = parseContent(activeFile.text, activeFile.format);
       const minified = minifyContent(currentObj, activeFile.format);
-      updateActiveFile(f => ({ ...f, text: minified, json: currentObj, error: null, isDirty: true }));
+      const newSize = new Blob([minified]).size;
+      updateActiveFile(f => ({ ...f, text: minified, json: currentObj, error: null, isDirty: true, meta: { ...f.meta, size: newSize } }));
     } catch (e: any) {
       alert("Cannot minify: Invalid syntax.");
     }
@@ -362,10 +431,21 @@ function App() {
     
     try {
       const newText = stringifyContent(activeFile.json, pendingFormat);
+      const newSize = new Blob([newText]).size;
+
+      if (pendingFormat === 'csv' && (!newText || newText.trim() === '')) {
+         alert("Conversion Warning: Resulting CSV is empty. Ensure your data structure is compatible with CSV (e.g. array of flat objects).");
+         setPendingFormat(null);
+         return;
+      }
+
       let newName = activeFile.name;
       const parts = newName.split('.');
       if (parts.length > 1) {
         parts[parts.length - 1] = pendingFormat === 'yaml' ? 'yaml' : pendingFormat === 'xml' ? 'xml' : 'json';
+        if (pendingFormat === 'csv') {
+           parts[parts.length - 1] = 'csv';
+        }
         newName = parts.join('.');
       } else {
         newName = `${newName}.${pendingFormat}`;
@@ -377,7 +457,9 @@ function App() {
         text: newText,
         name: newName,
         isDirty: true,
-        error: null 
+        error: null,
+        history: { snapshots: [newText], currentIndex: 0 },
+        meta: { ...f.meta, size: newSize }
       }));
       
       setViewMode('raw');
@@ -386,6 +468,22 @@ function App() {
       alert(`Conversion Failed: ${e.message}`);
     } finally {
       setPendingFormat(null);
+    }
+  };
+
+  const handleExportToJson = async () => {
+    if (!activeFile) return;
+    try {
+      const jsonContent = stringifyContent(activeFile.json, 'json');
+      const jsonName = activeFile.name.replace(/\.[^/.]+$/, "") + ".json";
+      
+      if (window.electron) {
+         await window.electron.saveFileAs(jsonName, jsonContent, 'json');
+      } else {
+         downloadJson(activeFile.json, jsonName);
+      }
+    } catch (e) {
+      alert("Export failed.");
     }
   };
 
@@ -461,6 +559,56 @@ function App() {
     }
   };
 
+  const handleUndo = () => {
+    if (!activeFile) return;
+    const { history } = activeFile;
+    if (history.currentIndex > 0) {
+      const prevIndex = history.currentIndex - 1;
+      const prevText = history.snapshots[prevIndex];
+      let prevJson = activeFile.json;
+      let error = null;
+      try {
+        prevJson = parseContent(prevText, activeFile.format);
+      } catch (e: any) {
+        error = e.message;
+      }
+
+      updateActiveFile(f => ({
+         ...f,
+         text: prevText,
+         json: error ? prevJson : prevJson,
+         error,
+         history: { ...f.history, currentIndex: prevIndex },
+         isDirty: true
+      }));
+    }
+  };
+
+  const handleRedo = () => {
+    if (!activeFile) return;
+    const { history } = activeFile;
+    if (history.currentIndex < history.snapshots.length - 1) {
+      const nextIndex = history.currentIndex + 1;
+      const nextText = history.snapshots[nextIndex];
+      let nextJson = activeFile.json;
+      let error = null;
+      try {
+        nextJson = parseContent(nextText, activeFile.format);
+      } catch (e: any) {
+        error = e.message;
+      }
+
+      updateActiveFile(f => ({
+         ...f,
+         text: nextText,
+         json: error ? nextJson : nextJson,
+         error,
+         history: { ...f.history, currentIndex: nextIndex },
+         isDirty: true
+      }));
+    }
+  };
+
   const handleModalSave = async () => {
     if (fileToCloseId) {
       const success = await handleSaveFile(fileToCloseId);
@@ -516,15 +664,8 @@ function App() {
   };
 
   // --- Favorite Logic ---
-  const toggleCurrentFileFavorite = async () => {
-    if (activeFile && activeFile.path && window.electron) {
-      const item: HistoryItem = {
-        name: activeFile.name,
-        path: activeFile.path,
-        format: activeFile.format,
-        lastOpened: new Date().toISOString()
-      };
-      
+  const handleToggleFavorite = async (item: HistoryItem) => {
+    if (window.electron) {
       const isCurrentlyFav = favorites.some(f => f.path === item.path);
       if (isCurrentlyFav) {
         setFavorites(prev => prev.filter(f => f.path !== item.path));
@@ -544,9 +685,50 @@ function App() {
     }
   };
 
+  const toggleCurrentFileFavorite = () => {
+    if (activeFile && activeFile.path) {
+      const item: HistoryItem = {
+        name: activeFile.name,
+        path: activeFile.path,
+        format: activeFile.format,
+        lastOpened: new Date().toISOString()
+      };
+      handleToggleFavorite(item);
+    }
+  };
+
+  // --- Drag & Drop Tab Logic ---
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedFileId(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData('text/plain');
+    setDraggedFileId(null);
+
+    if (sourceId === targetId) return;
+
+    const sourceIndex = files.findIndex(f => f.id === sourceId);
+    const targetIndex = files.findIndex(f => f.id === targetId);
+
+    if (sourceIndex !== -1 && targetIndex !== -1) {
+      const newFiles = [...files];
+      const [removed] = newFiles.splice(sourceIndex, 1);
+      newFiles.splice(targetIndex, 0, removed);
+      setFiles(newFiles);
+    }
+  };
+
   const dirtyFileForModal = files.find(f => f.id === fileToCloseId);
   
-  // Calculate favorite status
   const isCurrentFileFavorite = activeFile?.path 
     ? favorites.some(f => f.path === activeFile.path) 
     : false;
@@ -588,12 +770,16 @@ function App() {
                    <FileCode size={24} className="text-orange-500 dark:text-orange-400" />
                    <span className="text-xs font-medium">XML</span>
                 </button>
+                <button onClick={() => createNewFile('csv')} className="flex flex-col items-center gap-2 p-4 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/20 border border-slate-200 dark:border-slate-700 hover:border-green-500 transition-all w-24">
+                   <FileSpreadsheet size={24} className="text-green-500 dark:text-green-400" />
+                   <span className="text-xs font-medium">CSV</span>
+                </button>
              </div>
           </div>
         </div>
       )}
 
-      <input type="file" ref={fileInputRef} onChange={handleFileInputChange} className="hidden" accept=".json,.yaml,.yml,.xml,application/json,text/yaml,text/xml" />
+      <input type="file" ref={fileInputRef} onChange={handleFileInputChange} className="hidden" accept=".json,.yaml,.yml,.xml,.csv,application/json,text/yaml,text/xml,text/csv" />
 
       {/* TOOLBAR */}
       <Toolbar 
@@ -617,21 +803,19 @@ function App() {
         onConvert={initiateConvert}
         showLineNumbers={showLineNumbers}
         setShowLineNumbers={setShowLineNumbers}
-        isRenaming={isRenaming}
-        renameValue={renameValue}
-        setRenameValue={setRenameValue}
-        saveRename={saveRename}
-        handleRenameKeyDown={handleRenameKeyDown}
-        startRenaming={startRenaming}
-        onSave={() => handleSaveFile()}
-        onSaveAsCopy={() => handleSaveAsCopy(undefined, false)}
-        isFavorite={isCurrentFileFavorite}
-        onToggleFavorite={toggleCurrentFileFavorite}
+        activeView={activeView}
         onOpenHistory={() => setActiveView('history')}
+        onOpenCompare={() => setActiveView('compare')}
+        onExportJson={handleExportToJson}
+        searchInputRef={searchInputRef}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={!!activeFile?.history && activeFile.history.currentIndex > 0}
+        canRedo={!!activeFile?.history && activeFile.history.currentIndex < activeFile.history.snapshots.length - 1}
       />
 
       <div className="flex-1 flex overflow-hidden">
-        {showSidebar && activeView !== 'history' && (
+        {showSidebar && activeView !== 'history' && activeView !== 'compare' && (
           <Sidebar 
             activeFile={activeFile}
             onNewFile={() => setShowNewFileModal(true)}
@@ -639,20 +823,42 @@ function App() {
             stats={stats}
             onLoadFile={handleLoadFileFromPath}
             isFavorite={isCurrentFileFavorite} 
-            onToggleFavorite={toggleCurrentFileFavorite} 
+            onToggleFavorite={toggleCurrentFileFavorite}
+            favorites={favorites}
+            onSave={() => handleSaveFile()}
+            onSaveAsCopy={() => handleSaveAsCopy(undefined, false)}
+            isRenaming={isRenaming}
+            renameValue={renameValue}
+            setRenameValue={setRenameValue}
+            saveRename={saveRename}
+            handleRenameKeyDown={handleRenameKeyDown}
+            startRenaming={startRenaming}
           />
         )}
 
         <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-950">
           
           {/* Main Content Area */}
-          {activeView === 'history' ? (
+          {activeView === 'compare' ? (
+             <ComparePage 
+                originalContent={activeFile?.text || ''}
+                originalFileName={activeFile?.name}
+                onBack={() => {
+                   if (files.length > 0) setActiveView('editor');
+                   else setActiveView('home');
+                }}
+                theme={theme}
+             />
+          ) : activeView === 'history' ? (
              <HistoryPage 
                 onOpen={handleLoadFileFromPath} 
                 onBack={() => {
                   if (files.length > 0) setActiveView('editor');
                   else setActiveView('home');
                 }} 
+                favorites={favorites}
+                onToggleFavorite={handleToggleFavorite}
+                activeFilePath={activeFile?.path}
              />
           ) : (
             <>
@@ -665,8 +871,16 @@ function App() {
                   {files.map(file => (
                     <div 
                       key={file.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, file.id)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, file.id)}
                       onClick={() => setActiveFileId(file.id)}
-                      className={`group flex items-center gap-2 px-3 py-1.5 min-w-[120px] max-w-[200px] text-xs cursor-pointer border-t border-r border-l rounded-t-lg select-none transition-colors no-drag h-full mt-1 ${file.id === activeFileId ? 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-blue-600 dark:text-blue-400 font-medium relative top-[1px]' : 'bg-gray-200 dark:bg-slate-800 border-transparent text-slate-500 dark:text-slate-400 hover:bg-gray-200/80 dark:hover:bg-slate-700'}`}
+                      className={`group flex items-center gap-2 px-3 py-1.5 min-w-[120px] max-w-[200px] text-xs cursor-pointer border-t border-r border-l rounded-t-lg select-none transition-colors no-drag h-full mt-1 ${
+                        file.id === activeFileId 
+                          ? 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-blue-600 dark:text-blue-400 font-medium relative top-[1px]' 
+                          : 'bg-gray-200 dark:bg-slate-800 border-transparent text-slate-500 dark:text-slate-400 hover:bg-gray-200/80 dark:hover:bg-slate-700'
+                      } ${draggedFileId === file.id ? 'opacity-50' : ''}`}
                     >
                       {getFileIcon(file.format, 12, file.id === activeFileId ? '' : 'text-slate-400')}
                       <span className="truncate flex-1">{file.name}</span>

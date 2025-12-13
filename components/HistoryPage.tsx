@@ -11,7 +11,8 @@ import {
   ArrowDownAZ, 
   Calendar,
   HardDrive,
-  Filter
+  Filter,
+  FileSpreadsheet
 } from 'lucide-react';
 import { HistoryItem, FileFormat } from '../types';
 import { formatFileSize } from '../utils/jsonUtils';
@@ -19,14 +20,15 @@ import { formatFileSize } from '../utils/jsonUtils';
 interface HistoryPageProps {
   onOpen: (path: string, name: string) => void;
   onBack: () => void;
+  favorites: HistoryItem[];
+  onToggleFavorite: (item: HistoryItem) => void;
+  activeFilePath?: string;
 }
 
 type SortType = 'date' | 'name' | 'size';
 
-const HistoryPage: React.FC<HistoryPageProps> = ({ onOpen, onBack }) => {
-  // We use an extended type locally because `types.ts` might not have `size` yet
-  const [history, setHistory] = useState<(HistoryItem & { size?: number })[]>([]);
-  const [favorites, setFavorites] = useState<HistoryItem[]>([]);
+const HistoryPage: React.FC<HistoryPageProps> = ({ onOpen, onBack, favorites, onToggleFavorite, activeFilePath }) => {
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   
   // Filter & Sort State
   const [sortType, setSortType] = useState<SortType>('date');
@@ -35,7 +37,6 @@ const HistoryPage: React.FC<HistoryPageProps> = ({ onOpen, onBack }) => {
   useEffect(() => {
     if (window.electron) {
       window.electron.getHistory().then(setHistory);
-      window.electron.getFavorites().then(setFavorites);
     }
   }, []);
 
@@ -43,10 +44,7 @@ const HistoryPage: React.FC<HistoryPageProps> = ({ onOpen, onBack }) => {
 
   const handleToggleStar = async (e: React.MouseEvent, item: HistoryItem) => {
     e.stopPropagation();
-    if (window.electron) {
-      const updatedFavorites = await window.electron.toggleFavorite(item);
-      setFavorites(updatedFavorites);
-    }
+    onToggleFavorite(item);
   };
 
   const getFormatIcon = (format: FileFormat) => {
@@ -54,6 +52,7 @@ const HistoryPage: React.FC<HistoryPageProps> = ({ onOpen, onBack }) => {
       case 'json': return <FileJson size={18} className="text-yellow-500" />;
       case 'yaml': return <Database size={18} className="text-indigo-500" />;
       case 'xml': return <FileCode size={18} className="text-orange-500" />;
+      case 'csv': return <FileSpreadsheet size={18} className="text-green-500" />;
       default: return <FileJson size={18} className="text-blue-500" />;
     }
   };
@@ -62,22 +61,20 @@ const HistoryPage: React.FC<HistoryPageProps> = ({ onOpen, onBack }) => {
   const filteredAndSortedHistory = useMemo(() => {
     let result = [...history];
 
-    // 1. Filter
+    // Filter
     if (showFavoritesOnly) {
       result = result.filter(item => isFavorite(item.path));
     }
 
-    // 2. Sort
+    // Sort
     result.sort((a, b) => {
       switch (sortType) {
         case 'name':
           return a.name.localeCompare(b.name);
         case 'size':
-          // Sort larger files first
-          return (b.size || 0) - (a.size || 0); 
+          return (b.size || 0) - (a.size || 0); // Largest first
         case 'date':
         default:
-          // Sort newest first
           return new Date(b.lastOpened).getTime() - new Date(a.lastOpened).getTime();
       }
     });
@@ -107,10 +104,8 @@ const HistoryPage: React.FC<HistoryPageProps> = ({ onOpen, onBack }) => {
         </div>
       </div>
 
-      {/* Toolbar: Sort & Filter */}
+      {/* Toolbar */}
       <div className="px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-wrap items-center gap-4 sticky top-0 z-10 backdrop-blur-sm">
-        
-        {/* Sorting Group */}
         <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
           <button 
             onClick={() => setSortType('date')}
@@ -134,7 +129,6 @@ const HistoryPage: React.FC<HistoryPageProps> = ({ onOpen, onBack }) => {
 
         <div className="w-px h-6 bg-slate-300 dark:bg-slate-700 hidden sm:block"></div>
 
-        {/* Filter Group */}
         <button 
           onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all border ${showFavoritesOnly ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700 text-yellow-700 dark:text-yellow-400' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'}`}
@@ -154,11 +148,16 @@ const HistoryPage: React.FC<HistoryPageProps> = ({ onOpen, onBack }) => {
           {filteredAndSortedHistory.length > 0 ? (
              filteredAndSortedHistory.map((item, idx) => {
                 const fav = isFavorite(item.path);
+                const isActive = item.path === activeFilePath;
                 return (
                   <div 
                     key={`${item.path}-${idx}`}
                     onClick={() => onOpen(item.path, item.name)}
-                    className="group flex items-center gap-4 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer relative"
+                    className={`group flex items-center gap-4 p-3 rounded-lg transition-all cursor-pointer relative border ${
+                      isActive 
+                        ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 dark:border-indigo-400 shadow-sm' 
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
                   >
                     <div className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors">
                       {getFormatIcon(item.format)}
