@@ -1,12 +1,6 @@
-
 const { app, BrowserWindow, shell, ipcMain, dialog, Tray, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
-
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (require('electron-squirrel-startup')) {
-  app.quit();
-}
 
 let mainWindow;
 let splashWindow;

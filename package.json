@@ -3,6 +3,8 @@
   "name": "tree-file",
   "private": true,
   "version": "1.0.0",
+  "description": "A local database viewer for JSON, YAML, and XML files.",
+  "author": "LokmanX22",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
