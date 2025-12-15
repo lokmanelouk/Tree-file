@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    /* 1. Make the main window canvas invisible */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent; /* CRITICAL */
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 2. Create the rounded box inside */
+    .wrapper {
+      background-color: #0f172a; /* Slate 950 */
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      
+      /* This creates the rounded shape */
+      border-radius: 16px; 
+      border: 1px solid #1e293b;
+      box-sizing: border-box;
+      
+      /* Prevent content from leaking out of corners */
+      overflow: hidden; 
+      
+      /* Optional: Smooth fade-in */
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .logo-container {
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-image {
+      width: 96px;
+      height: 96px;
+      border-radius: 20px;
+      box-shadow: 0 10px 40px -5px rgba(0, 0, 0, 0.5);
+      object-fit: cover;
+      background-color: #1e293b;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-radius: 50%;
+      border-top-color: #818cf8;
+      animation: spin 1s ease-in-out infinite;
+      margin-top: 24px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    h1 {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0;
+      color: #f8fafc;
+      letter-spacing: -0.01em;
+    }
+
+    p {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      color: #64748b;
+      margin-top: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="logo-container">
+      <img src="../resources/icon.png" class="logo-image" alt="Tree File Logo">
+    </div>
+    <h1>Tree File</h1>
+    <p>Loading Workspace...</p>
+    <div class="spinner"></div>
+  </div>
+</body>
+</html>

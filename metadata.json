@@ -1,0 +1,5 @@
+{
+  "name": "TreeFile",
+  "description": "A powerful local database viewer for inspecting, searching, and sorting large JSON, YAML, and XML files with a clean, developer-friendly interface.",
+  "requestFramePermissions": []
+}
