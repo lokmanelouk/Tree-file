@@ -8,7 +8,7 @@
 ## 🚀 Download
 
 **Windows:**
-[<kbd>Download for Windows (.exe)</kbd>](https://github.com/lokmanelouk/TreeFile/releases/latest)
+[<kbd>Download for Windows (.exe)</kbd>](https://github.com/lokmanelouk/Tree-file/releases)
 
 ---
 
