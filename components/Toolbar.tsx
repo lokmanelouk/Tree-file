@@ -96,8 +96,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
   setViewMode,
   searchQuery,
   setSearchQuery,
-  sortOrder,
-  setViewSortOrder,
   viewSettings,
   setViewSettings,
   onFormat,

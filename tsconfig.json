@@ -1,4 +1,3 @@
-
 {
   "compilerOptions": {
     "target": "ES2020",
@@ -18,9 +17,10 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./*"]
     }
   },
-  "include": ["src"],
+  "include": ["./**/*"],
+  "exclude": ["node_modules", "dist", "release", "electron", "vite.config.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

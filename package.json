@@ -1,8 +1,7 @@
-
 {
   "name": "tree-file",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A local database viewer for JSON, YAML, and XML files.",
   "author": "LokmanX22",
   "main": "electron/main.js",
@@ -15,20 +14,23 @@
     "electron:build": "npm run build && electron-builder"
   },
   "dependencies": {
+    "cmdk": "^1.0.0",
+    "electron-squirrel-startup": "^1.0.1",
     "fast-xml-parser": "^4.3.2",
     "js-yaml": "^4.1.0",
     "lucide-react": "^0.292.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "papaparse": "^5.4.1",
+    "react": "^18.2.0",
     "react-diff-viewer-continued": "^3.4.0",
-    "react-syntax-highlighter": "^15.5.0",
-    "cmdk": "^1.0.0"
+    "react-dom": "^18.2.0",
+    "react-syntax-highlighter": "^15.5.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "@vitejs/plugin-react": "^4.2.0",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",

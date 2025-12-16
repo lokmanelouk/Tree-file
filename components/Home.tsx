@@ -1,6 +1,6 @@
 
 import React, { useCallback } from 'react';
-import { Upload, AlertCircle } from 'lucide-react';
+import { Upload } from 'lucide-react';
 
 interface HomeProps {
   onFileLoaded: (data: any, fileName: string, size: number, path?: string, content?: string) => void;

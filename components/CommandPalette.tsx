@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Command } from 'cmdk';
 import { 
   FilePlus, 
@@ -103,7 +103,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
   };
 
   // Close when clicking the backdrop
-  const handleBackdropClick = (e: React.MouseEvent) => {
+  const handleBackdropClick = () => {
      onOpenChange(false);
   };
 

@@ -133,7 +133,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         .replace(/>/g, '&gt;')
         .replace(
           /^(\s*)([\w\d_]+)(:)(.*)$/g,
-          (match, indent, key, colon, value) => `${indent}<span class="text-blue-600 dark:text-blue-400 font-bold">${key}</span>${colon}<span class="text-green-600 dark:text-green-400">${value}</span>`
+          (indent, key, colon, value) => `${indent}<span class="text-blue-600 dark:text-blue-400 font-bold">${key}</span>${colon}<span class="text-green-600 dark:text-green-400">${value}</span>`
         )
         .replace(/(- )/g, '<span class="text-purple-600 dark:text-purple-400 font-bold">- </span>');
     } else if (format === 'xml') {
@@ -143,7 +143,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         .replace(/>/g, '&gt;')
         .replace(
           /(&lt;\/?[a-zA-Z0-9_:-]+)(\s.*?)*(&gt;)/g,
-          (match, startTag, attrs, endTag) => {
+          (startTag, attrs, endTag) => {
              let coloredAttrs = '';
              if (attrs) {
                coloredAttrs = attrs.replace(

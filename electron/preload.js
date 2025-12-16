@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('electron', {
   
   // Dialogs & Window Management
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
+  quitApp: () => ipcRenderer.send('quit-app'),
   
   // Listeners
   onAppClosing: (callback) => ipcRenderer.on('app-closing', callback),

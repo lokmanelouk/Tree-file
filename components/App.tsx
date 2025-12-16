@@ -202,7 +202,7 @@ function App() {
     let json = loadedData;
     let fileSize = size;
 
-    if (rawContent && Object.keys(loadedData).length === 0) {
+    if (rawContent && loadedData && typeof loadedData === 'object' && Object.keys(loadedData).length === 0) {
        try {
          json = parseContent(rawContent, format);
          text = rawContent;
@@ -588,7 +588,7 @@ function App() {
       }
     } 
     else if (window.electron && !file.path) {
-      return await handleSaveAsCopy(fileId, true);
+      return await handleSaveAsCopy(fileId ?? undefined, true);
     }
     else {
       downloadJson(file.json, file.name); 

@@ -1,5 +1,5 @@
 
-import { JsonValue, JsonObject, JsonArray, SortOrder, Path } from '../types';
+import { JsonValue, JsonObject, SortOrder, Path } from '../types';
 
 export interface JsonStats {
   totalNodes: number;

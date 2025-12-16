@@ -65,6 +65,7 @@ declare global {
       saveFile: (path: string, content: string) => Promise<{ success: boolean; error?: string }>;
       saveFileAs: (defaultName: string, content: string, format: FileFormat) => Promise<{ success: boolean; filePath?: string; canceled?: boolean }>;
       minimizeWindow: () => void;
+      quitApp: () => void;
       onAppClosing: (callback: () => void) => void;
       
       // History
