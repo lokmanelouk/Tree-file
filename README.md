@@ -36,7 +36,7 @@ Get the latest version for Windows. No installation required, just download and 
 
 <div align="center">
 
-[![Download for Windows](https://img.shields.io/badge/Download-Windows%20(.exe)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/LOKMAN-HAKIM-Z/tree-file/releases/latest)
+[![Download for Windows](https://img.shields.io/badge/Download-Windows%20(.exe)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/lokmaneLouk/tree-file/releases/latest)
 
 </div>
 
