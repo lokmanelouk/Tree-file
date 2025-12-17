@@ -126,9 +126,16 @@ const JsonNode: React.FC<JsonNodeProps> = ({
     if (typeof val === 'boolean') return <span className="text-purple-600 dark:text-purple-400"><HighlightText text={String(val)} term={searchTerm} /></span>;
     if (typeof val === 'number') return <span className="text-orange-600 dark:text-orange-400"><HighlightText text={String(val)} term={searchTerm} /></span>;
     if (typeof val === 'string') return <span className="text-green-700 dark:text-green-400">"<HighlightText text={val} term={searchTerm} />"</span>;
-    if (Array.isArray(val)) return <span className="text-slate-500 italic">Array({val.length})</span>;
-    return <span className="text-slate-500 italic">Object</span>;
+    return null; // Should not reach here for primitives
   };
+
+  // Type label logic
+  const typeLabel = useMemo(() => {
+    if (value === null) return null;
+    if (Array.isArray(value)) return `Array(${value.length})`;
+    if (typeof value === 'object') return 'Object';
+    return null;
+  }, [value]);
 
   return (
     <div className="font-mono text-[13px] leading-6">
@@ -173,7 +180,14 @@ const JsonNode: React.FC<JsonNodeProps> = ({
           </div>
         ) : (
           <span className="text-slate-700 dark:text-slate-300">
-            {(!expanded || isPrimitive) && renderValue(value)}
+            {isPrimitive ? (
+              renderValue(value)
+            ) : (
+              // For Objects/Arrays: Display type label (Object/Array(N)) always, in gray italic
+              <span className="text-slate-400 dark:text-slate-500 italic text-xs select-none">
+                {typeLabel}
+              </span>
+            )}
           </span>
         )}
         {!isEditing && isPrimitive && onUpdate && !searchTerm && (
@@ -202,7 +216,7 @@ const JsonNode: React.FC<JsonNodeProps> = ({
                 searchTerm={searchTerm}
                 depth={depth + 1}
                 onContextMenu={onContextMenu}
-                isSelected={isSelected} // Propagating selected state (could be refined to check path match)
+                isSelected={isSelected}
               />
             ))
           ) : (
@@ -219,7 +233,7 @@ const JsonNode: React.FC<JsonNodeProps> = ({
                 searchTerm={searchTerm}
                 depth={depth + 1}
                 onContextMenu={onContextMenu}
-                isSelected={isSelected} // Propagating selected state
+                isSelected={isSelected}
               />
             ))
           )}

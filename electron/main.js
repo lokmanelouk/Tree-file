@@ -1,3 +1,4 @@
+
 const { app, BrowserWindow, shell, ipcMain, dialog, Tray, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -27,7 +28,7 @@ function createSplashWindow() {
     height: 380,
     frame: false,
     transparent: true,
-    alwaysOnTop: true,
+    alwaysOnTop: false, // CHANGED: Set to false to allow Alt+Tab
     resizable: false,
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
     webPreferences: {
@@ -46,9 +47,13 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    minWidth: 800,  // Added minimum width
+    minHeight: 600, // Added minimum height
+    resizable: true, // Explicitly allow resizing
     title: "Tree File",
     icon: fs.existsSync(iconPath) ? iconPath : undefined, 
     autoHideMenuBar: true,
+    frame: true, // Ensure window frame/controls are visible
     show: false,
     webPreferences: {
       nodeIntegration: false, 

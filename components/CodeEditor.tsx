@@ -13,6 +13,8 @@ interface CodeEditorProps {
   showLineNumbers?: boolean;
 }
 
+const LINE_HEIGHT = 24; // Fixed line height in pixels (matches Tailwind leading-6)
+
 const CodeEditor: React.FC<CodeEditorProps> = ({ 
   value, 
   onChange, 
@@ -24,10 +26,55 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const gutterRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(600);
   const [activeLine, setActiveLine] = useState(0);
 
-  // --- Auto-Scroll to Search Match ---
+  const lines = useMemo(() => value.split('\n'), [value]);
+  const totalLines = lines.length;
+
+  // --- Resize Observer to handle window resizing ---
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // --- Sync Scroll ---
+  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    setScrollTop(e.currentTarget.scrollTop);
+    
+    // Sync active line based on cursor position logic could go here, 
+    // but we use click/keyup for that to be more precise
+  };
+
+  const updateActiveLine = () => {
+    if (textareaRef.current) {
+      const { selectionStart } = textareaRef.current;
+      const val = textareaRef.current.value;
+      // Faster way to count newlines up to selection
+      let line = 0;
+      for (let i = 0; i < selectionStart; i++) {
+        if (val[i] === '\n') line++;
+      }
+      setActiveLine(line);
+    }
+  };
+
+  const handleKeyUp = () => updateActiveLine();
+  const handleClick = () => updateActiveLine();
+  
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    onChange(e.target.value);
+    requestAnimationFrame(updateActiveLine);
+  };
+
+  // --- Search Auto-Scroll ---
   useEffect(() => {
     if (searchTerm && value && textareaRef.current) {
       const lowerVal = value.toLowerCase();
@@ -35,78 +82,52 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       const index = lowerVal.indexOf(lowerTerm);
 
       if (index !== -1) {
-        // Calculate line number
-        const textBefore = value.substring(0, index);
-        const lineIndex = textBefore.split('\n').length - 1;
-        
-        // Approximate line height for Tailwind 'leading-6' is 1.5rem = 24px
-        const lineHeight = 24; 
-        
-        // Scroll to the line (minus some padding to keep it in context)
-        const scrollTo = Math.max(0, (lineIndex * lineHeight) - 100);
-        
-        textareaRef.current.scrollTo({
-          top: scrollTo,
-          behavior: 'smooth'
-        });
-        
-        // Manually trigger handleScroll to sync layers immediately
-        if (containerRef.current) containerRef.current.scrollTop = scrollTo;
-        if (gutterRef.current) gutterRef.current.scrollTop = scrollTo;
+        let lineIndex = 0;
+        for (let i = 0; i < index; i++) {
+          if (value[i] === '\n') lineIndex++;
+        }
+        const scrollTo = Math.max(0, (lineIndex * LINE_HEIGHT) - (containerHeight / 2));
+        textareaRef.current.scrollTo({ top: scrollTo, behavior: 'auto' }); // 'auto' is faster than smooth for large jumps
+        setScrollTop(scrollTo);
       }
     }
-  }, [searchTerm, value]);
-  // ------------------------------------
+  }, [searchTerm, value, containerHeight]);
 
-  const handleScroll = () => {
-    if (textareaRef.current) {
-      const { scrollTop, scrollLeft } = textareaRef.current;
-      if (containerRef.current) {
-        containerRef.current.scrollTop = scrollTop;
-        containerRef.current.scrollLeft = scrollLeft;
-      }
-      if (gutterRef.current) {
-        gutterRef.current.scrollTop = scrollTop;
-      }
+
+  // --- Virtualization Logic ---
+  const startLine = Math.floor(scrollTop / LINE_HEIGHT);
+  const visibleLinesCount = Math.ceil(containerHeight / LINE_HEIGHT);
+  // Render a buffer of lines above and below to prevent white flashes while scrolling
+  const renderStart = Math.max(0, startLine - 5);
+  const renderEnd = Math.min(totalLines, startLine + visibleLinesCount + 5);
+
+  const visibleLines = useMemo(() => {
+    return lines.slice(renderStart, renderEnd).map((line, index) => ({
+      index: renderStart + index,
+      content: line
+    }));
+  }, [lines, renderStart, renderEnd]);
+
+
+  // --- Syntax Highlighting ---
+  const highlightCode = (code: string) => {
+    if (!code) return '';
+    
+    // SAFETY CHECK: If line is too long, disable regex highlighting to prevent freeze
+    if (code.length > 2000) {
+        return code
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
     }
-  };
 
-  const updateActiveLine = () => {
-    if (textareaRef.current) {
-      const { selectionStart, value } = textareaRef.current;
-      const currentLine = value.substring(0, selectionStart).split('\n').length - 1;
-      setActiveLine(currentLine);
-    }
-  };
-
-  const handleKeyUp = () => updateActiveLine();
-  const handleClick = () => updateActiveLine();
-  const handleSelect = () => updateActiveLine();
-  
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    onChange(e.target.value);
-    // Defer update to ensure value is committed and selection is accurate
-    requestAnimationFrame(updateActiveLine);
-  };
-
-  const lines = useMemo(() => {
-    if (!showLineNumbers) return [];
-    const count = value.split('\n').length;
-    return Array.from({ length: count }, (_, i) => i + 1);
-  }, [value, showLineNumbers]);
-
-  const escapeHtml = (unsafe: string) => {
-    return unsafe
+    const escapeHtml = (unsafe: string) => unsafe
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
-  }
-
-  const highlightCode = (code: string) => {
-    if (!code) return '';
-    const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      
     let highlighted = '';
 
     if (format === 'json') {
@@ -126,36 +147,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             return `<span class="${cls}">${token}</span>`;
           }
         );
-    } else if (format === 'yaml') {
-      highlighted = code
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(
-          /^(\s*)([\w\d_]+)(:)(.*)$/g,
-          (indent, key, colon, value) => `${indent}<span class="text-blue-600 dark:text-blue-400 font-bold">${key}</span>${colon}<span class="text-green-600 dark:text-green-400">${value}</span>`
-        )
-        .replace(/(- )/g, '<span class="text-purple-600 dark:text-purple-400 font-bold">- </span>');
-    } else if (format === 'xml') {
-      highlighted = code
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(
-          /(&lt;\/?[a-zA-Z0-9_:-]+)(\s.*?)*(&gt;)/g,
-          (startTag, attrs, endTag) => {
-             let coloredAttrs = '';
-             if (attrs) {
-               coloredAttrs = attrs.replace(
-                 /([a-zA-Z0-9_:-]+)=(".*?"|'.*?')/g, 
-                 '<span class="text-orange-600 dark:text-orange-400">$1</span>=<span class="text-green-600 dark:text-green-400">$2</span>'
-               );
-             }
-             return `<span class="text-blue-600 dark:text-blue-400 font-bold">${startTag}</span>${coloredAttrs || ''}<span class="text-blue-600 dark:text-blue-400 font-bold">${endTag}</span>`;
-          }
-        );
     } else if (format === 'csv') {
-      highlighted = code
+       highlighted = code
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -174,12 +167,12 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           }
         );
     } else {
-      highlighted = escapeHtml(code);
+       // Simple fallback for YAML/XML/Others to avoid complex regex perf hit on scroll
+       highlighted = escapeHtml(code);
     }
 
     if (searchTerm) {
-       const term = escapeRegExp(searchTerm);
-       // Ensure we highlight all occurrences but don't break HTML tags
+       const term = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
        const regex = new RegExp(`(${term})(?![^<]*>)`, 'gi');
        highlighted = highlighted.replace(regex, `<span class="bg-yellow-400 text-black rounded-[1px]">$1</span>`);
     }
@@ -187,54 +180,80 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     return highlighted;
   };
 
-  const valueLines = value.split('\n');
-
   return (
-    <div className={`flex h-full w-full bg-slate-50 dark:bg-slate-950 font-mono text-sm transition-colors duration-200 overflow-hidden ${className} ${error ? 'border-2 border-red-500 rounded-lg' : ''}`}>
+    <div 
+      ref={containerRef}
+      className={`relative flex h-full w-full bg-slate-50 dark:bg-slate-950 font-mono text-sm overflow-hidden ${className} ${error ? 'border-2 border-red-500 rounded-lg' : ''}`}
+    >
       
-      {/* Line Numbers Gutter */}
+      {/* 1. Line Numbers Layer (Virtualized) */}
       {showLineNumbers && (
         <div 
-          ref={gutterRef}
-          className="w-14 shrink-0 bg-slate-100 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-right select-none overflow-hidden pt-4 pb-4 flex flex-col items-stretch"
+          className="w-14 shrink-0 bg-slate-100 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-right select-none z-10 overflow-hidden"
+          style={{ height: '100%' }}
         >
-          {lines.map((line, i) => (
-            <div 
-              key={line} 
-              className={`leading-6 pr-3 transition-colors ${
-                i === activeLine 
-                  ? 'text-blue-600 dark:text-blue-400 font-bold bg-blue-100/50 dark:bg-blue-900/20 border-r-2 border-blue-500' 
-                  : 'hover:text-slate-600 dark:hover:text-slate-300'
-              }`}
-            >
-              {line}
-            </div>
-          ))}
+          <div style={{ transform: `translateY(-${scrollTop}px)`, padding: '1rem 0' }}>
+             {/* Only render line numbers that correspond to the visible lines */}
+             {visibleLines.map(({ index }) => (
+               <div 
+                 key={index}
+                 style={{ 
+                   position: 'absolute', 
+                   top: (index * LINE_HEIGHT) + 16, // +16 for padding top
+                   left: 0, 
+                   right: 12,
+                   height: LINE_HEIGHT 
+                 }}
+                 className={`leading-6 transition-colors ${
+                   index === activeLine 
+                     ? 'text-blue-600 dark:text-blue-400 font-bold' 
+                     : ''
+                 }`}
+               >
+                 {index + 1}
+               </div>
+             ))}
+          </div>
         </div>
       )}
 
+      {/* 2. Main Content Area */}
       <div className="relative flex-1 h-full overflow-hidden">
-        {/* Empty State Placeholder */}
+        
+        {/* Empty State */}
         {value.length === 0 && (
           <div className="absolute top-4 left-4 text-slate-400 dark:text-slate-500 italic pointer-events-none z-20 select-none font-sans">
             // This file is empty. Start typing to add content.
           </div>
         )}
 
-        {/* Syntax Highlight Layer */}
+        {/* 2A. Syntax Highlight Layer (Virtualized) */}
         <div
-          ref={containerRef}
           aria-hidden="true"
-          className="absolute inset-0 m-0 p-4 pointer-events-none whitespace-pre-wrap break-words overflow-hidden leading-6 z-0"
+          className="absolute inset-0 pointer-events-none whitespace-pre z-0"
+          style={{ 
+             transform: `translateY(-${scrollTop}px)`,
+             padding: '1rem' // Match textarea padding
+          }}
         >
-            {valueLines.map((line, i) => (
-                <div key={i} className={`relative w-full ${i === activeLine ? 'bg-slate-200/50 dark:bg-slate-800/80 -mx-4 px-4' : ''}`}>
-                   <span dangerouslySetInnerHTML={{ __html: highlightCode(line) || '\u200B' }} />
+            {visibleLines.map(({ index, content }) => (
+                <div 
+                  key={index} 
+                  style={{
+                    position: 'absolute',
+                    top: (index * LINE_HEIGHT) + 16,
+                    left: 16,
+                    right: 0,
+                    height: LINE_HEIGHT
+                  }}
+                  className={`w-full ${index === activeLine ? 'bg-slate-200/50 dark:bg-slate-800/80 -mx-4 px-4' : ''}`}
+                >
+                   <span dangerouslySetInnerHTML={{ __html: highlightCode(content) || '\u200B' }} />
                 </div>
             ))}
         </div>
 
-        {/* Input Layer */}
+        {/* 2B. Native Textarea (Scroller) */}
         <textarea
           ref={textareaRef}
           value={value}
@@ -242,9 +261,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           onScroll={handleScroll}
           onKeyUp={handleKeyUp}
           onClick={handleClick}
-          onSelect={handleSelect}
           spellCheck={false}
-          className="absolute inset-0 w-full h-full m-0 p-4 bg-transparent text-transparent caret-slate-900 dark:caret-white outline-none resize-none whitespace-pre-wrap break-words z-10 leading-6"
+          className="absolute inset-0 w-full h-full m-0 p-4 bg-transparent text-transparent caret-slate-900 dark:caret-white outline-none resize-none whitespace-pre overflow-auto z-10 leading-6"
+          style={{ lineHeight: `${LINE_HEIGHT}px` }}
         />
       </div>
 

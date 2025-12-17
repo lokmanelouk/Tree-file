@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
-import { ArrowLeft, Upload, Columns, Rows, FileText, X, GitCompare, FilePlus, Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowLeft, Upload, Columns, Rows, FileText, X, GitCompare, FilePlus, Maximize2, Minimize2, Loader2 } from 'lucide-react';
 import { detectFormat } from '../utils/parserUtils';
 import { FileFormat } from '../types';
 
@@ -28,6 +28,7 @@ const ComparePage: React.FC<ComparePageProps> = ({
   const [modifiedFileName, setModifiedFileName] = useState<string>('');
   const [splitView, setSplitView] = useState(true);
   const [showAllLines, setShowAllLines] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   const rightFileInputRef = useRef<HTMLInputElement>(null);
   const leftFileInputRef = useRef<HTMLInputElement>(null);
@@ -39,59 +40,50 @@ const ComparePage: React.FC<ComparePageProps> = ({
     }
   }, [originalContent, originalFileName]);
 
-  const handleLeftFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
+  const processFile = (file: File, side: 'left' | 'right') => {
+    setIsProcessing(true);
+    // Timeout allows the UI to render the loading spinner before reading/diffing starts
+    setTimeout(() => {
       const reader = new FileReader();
       reader.onload = (ev) => {
         if (typeof ev.target?.result === 'string') {
-          setLeftFile({ content: ev.target.result, name: file.name });
+          if (side === 'left') {
+            setLeftFile({ content: ev.target.result, name: file.name });
+          } else {
+            setModifiedContent(ev.target.result);
+            setModifiedFileName(file.name);
+          }
         }
+        setIsProcessing(false);
       };
+      reader.onerror = () => setIsProcessing(false);
       reader.readAsText(file);
+    }, 100);
+  };
+
+  const handleLeftFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFile(e.target.files[0], 'left');
     }
   };
 
   const handleRightFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (typeof ev.target?.result === 'string') {
-          setModifiedContent(ev.target.result);
-          setModifiedFileName(file.name);
-        }
-      };
-      reader.readAsText(file);
+      processFile(e.target.files[0], 'right');
     }
   };
 
   const handleDropLeft = (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (typeof ev.target?.result === 'string') {
-           setLeftFile({ content: ev.target.result, name: file.name });
-        }
-      };
-      reader.readAsText(file);
+      processFile(e.dataTransfer.files[0], 'left');
     }
   };
 
   const handleDropRight = (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (typeof ev.target?.result === 'string') {
-          setModifiedContent(ev.target.result);
-          setModifiedFileName(file.name);
-        }
-      };
-      reader.readAsText(file);
+      processFile(e.dataTransfer.files[0], 'right');
     }
   };
 
@@ -193,7 +185,17 @@ const ComparePage: React.FC<ComparePageProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-slate-950">
+    <div className="h-full flex flex-col bg-white dark:bg-slate-950 relative">
+      
+      {/* Loading Overlay specific to Compare Page */}
+      {isProcessing && (
+         <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 z-50 flex flex-col items-center justify-center backdrop-blur-sm animate-in fade-in duration-200">
+            <Loader2 size={40} className="text-orange-500 animate-spin mb-4" />
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Analyzing Differences...</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Processing file content.</p>
+         </div>
+      )}
+
       {/* Header Toolbar */}
       <div className="h-16 flex items-center px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 z-10 shrink-0 gap-4">
         <button 
@@ -302,7 +304,7 @@ const ComparePage: React.FC<ComparePageProps> = ({
               </div>
 
               {/* Right Side Upload */}
-              <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-slate-950">
+              <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-slate-900/50">
                  <div 
                    className="w-full max-w-md border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-10 flex flex-col items-center justify-center text-center hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer bg-white dark:bg-slate-900/50"
                    onClick={() => rightFileInputRef.current?.click()}

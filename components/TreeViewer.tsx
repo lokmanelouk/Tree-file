@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { AlertOctagon, FileX, Copy, Code2, Link2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { AlertOctagon, FileX, Copy, Code2, Link2, Loader2 } from 'lucide-react';
 import JsonNode from './JsonNode';
 import { JsonValue, ViewSettings, OnUpdateValue, Path } from '../types';
 
@@ -28,6 +28,35 @@ const TreeViewer: React.FC<TreeViewerProps> = ({
   onUpdate 
 }) => {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  
+  // Infinite Scroll State
+  const [visibleCount, setVisibleCount] = useState(50);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Reset visible count when data changes or search changes
+  useEffect(() => {
+    setVisibleCount(50);
+  }, [data, searchQuery]);
+
+  // Infinite Scroll Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => prev + 50);
+        }
+      },
+      { rootMargin: '100px' }
+    );
+
+    if (bottomRef.current) {
+      observer.observe(bottomRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [data, visibleCount]);
 
   // Close context menu on click elsewhere
   useEffect(() => {
@@ -36,22 +65,15 @@ const TreeViewer: React.FC<TreeViewerProps> = ({
     return () => window.removeEventListener('click', handleClick);
   }, []);
 
-  // Generate JS Access Path (e.g., data[0].users['name'])
   const generatePathString = (path: Path): string => {
     if (path.length === 0) return '';
-    
     return path.reduce<string>((acc, key, i) => {
-      // If it's a number, it's an array index
       if (typeof key === 'number') {
         return `${acc}[${key}]`;
       }
-      
-      // If it's a string, check if it's a valid identifier
       if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)) {
         return i === 0 ? key : `${acc}.${key}`;
       }
-      
-      // Otherwise use bracket notation with quotes
       return `${acc}["${key}"]`;
     }, '');
   };
@@ -72,16 +94,20 @@ const TreeViewer: React.FC<TreeViewerProps> = ({
     setContextMenu(null);
   };
 
-  // Check if a specific node path matches the open context menu
-  // Used to maintain highlight
   const isNodeSelected = (path: Path) => {
     if (!contextMenu) return false;
-    // Simple path equality check
     if (path.length !== contextMenu.path.length) return false;
     return path.every((val, index) => val === contextMenu.path[index]);
   };
 
-  // 1. Error State
+  // Helper to check if data is "empty"
+  const isDataEmpty = (d: JsonValue) => {
+    if (!d) return true;
+    if (Array.isArray(d)) return d.length === 0;
+    if (typeof d === 'object' && d !== null) return Object.keys(d).length === 0;
+    return false;
+  };
+
   if (error) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-80">
@@ -94,15 +120,6 @@ const TreeViewer: React.FC<TreeViewerProps> = ({
     );
   }
 
-  // Helper to check if data is "empty"
-  const isDataEmpty = (d: JsonValue) => {
-    if (!d) return true;
-    if (Array.isArray(d)) return d.length === 0;
-    if (typeof d === 'object' && d !== null) return Object.keys(d).length === 0;
-    return false;
-  };
-
-  // 2. Empty State
   if (isDataEmpty(data)) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-80">
@@ -115,50 +132,68 @@ const TreeViewer: React.FC<TreeViewerProps> = ({
     );
   }
 
-  // 3. Render Tree
+  // Determine items to render
+  let itemsToRender: React.ReactElement[] = [];
+  let totalItems = 0;
+
+  if (Array.isArray(data)) {
+    totalItems = data.length;
+    itemsToRender = data.slice(0, visibleCount).map((item, idx) => {
+      const currentPath = [idx];
+      return (
+        <JsonNode 
+          key={idx} 
+          name={idx} 
+          value={item} 
+          isLast={idx === data.length - 1} 
+          prefix="" 
+          settings={settings} 
+          path={currentPath} 
+          onUpdate={onUpdate} 
+          searchTerm={searchQuery} 
+          depth={1} // Start at depth 1 so strict inequality checks (1 < 1) force collapse
+          onContextMenu={handleContextMenu}
+          isSelected={isNodeSelected(currentPath)}
+        />
+      );
+    });
+  } else if (typeof data === 'object' && data !== null) {
+    const entries = Object.entries(data);
+    totalItems = entries.length;
+    itemsToRender = entries.slice(0, visibleCount).map(([key, val], idx) => {
+      const currentPath = [key];
+      return (
+        <JsonNode 
+          key={key} 
+          name={key} 
+          value={val} 
+          isLast={idx === entries.length - 1} 
+          prefix="" 
+          settings={settings} 
+          path={currentPath} 
+          onUpdate={onUpdate} 
+          searchTerm={searchQuery} 
+          depth={1} // Start at depth 1
+          onContextMenu={handleContextMenu}
+          isSelected={isNodeSelected(currentPath)}
+        />
+      );
+    });
+  }
+
   return (
     <div className={`p-6 min-w-fit ${settings.fontSize === 'sm' ? 'text-xs' : settings.fontSize === 'lg' ? 'text-lg' : 'text-sm'}`}>
       <div className="font-mono">
-        {Array.isArray(data) ? (
-          data.map((item, idx, arr) => {
-            const currentPath = [idx];
-            return (
-              <JsonNode 
-                key={idx} 
-                name={idx} 
-                value={item} 
-                isLast={idx === arr.length - 1} 
-                prefix="" 
-                settings={settings} 
-                path={currentPath} 
-                onUpdate={onUpdate} 
-                searchTerm={searchQuery} 
-                depth={0} 
-                onContextMenu={handleContextMenu}
-                isSelected={isNodeSelected(currentPath)}
-              />
-            );
-          })
-        ) : (
-          Object.entries(data as object).map(([key, val], idx, arr) => {
-            const currentPath = [key];
-            return (
-              <JsonNode 
-                key={key} 
-                name={key} 
-                value={val} 
-                isLast={idx === arr.length - 1} 
-                prefix="" 
-                settings={settings} 
-                path={currentPath} 
-                onUpdate={onUpdate} 
-                searchTerm={searchQuery} 
-                depth={0} 
-                onContextMenu={handleContextMenu}
-                isSelected={isNodeSelected(currentPath)}
-              />
-            );
-          })
+        {itemsToRender}
+      </div>
+
+      {/* Infinite Scroll Sentinel */}
+      <div ref={bottomRef} className="h-10 w-full flex items-center justify-center mt-4">
+        {visibleCount < totalItems && (
+          <div className="flex items-center gap-2 text-slate-400 text-xs">
+            <Loader2 size={14} className="animate-spin" />
+            <span>Loading more items...</span>
+          </div>
         )}
       </div>
 

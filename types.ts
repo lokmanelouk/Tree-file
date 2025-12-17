@@ -33,6 +33,7 @@ export interface EditorFile {
   meta: FileMetaData;
   error?: string | null;
   history: FileHistory;
+  formatStyle?: 'pretty' | 'compact'; // Tracks if the file is currently formatted or minified
 }
 
 export type SortOrder = 'original' | 'asc' | 'desc';

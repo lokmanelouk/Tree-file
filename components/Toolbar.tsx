@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import {
   PanelLeftClose,
@@ -34,8 +35,8 @@ import {
   Terminal,
 } from "lucide-react";
 import { EditorFile, FileFormat, SortOrder, ViewSettings } from "../types";
-// @ts-ignore
-import appLogo from "../assets/icon.png";
+import Tooltip from "./Tooltip";
+import appLogo from '../assets/icon.png';
 
 interface ToolbarProps {
   showSidebar: boolean;
@@ -168,6 +169,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
   };
 
   const isEditorView = activeView === "editor" || activeView === "home";
+  
+  // Format check: YAML and CSV do not support standard "Pretty/Minify" toggling in the same way JSON/XML do
+  // so we hide these buttons for them.
+  const isFormatSupported = activeFile && !['yaml', 'csv'].includes(activeFile.format);
+  
+  // Visual active state for formatting buttons
+  const isPrettyActive = activeFile?.formatStyle === 'pretty';
+  const isCompactActive = activeFile?.formatStyle === 'compact';
 
   return (
     <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 relative z-30">
@@ -175,25 +184,27 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <div className="h-14 flex items-center px-4 justify-between gap-4 select-none draggable-region">
         {/* GROUP 1: Sidebar Toggle & Logo (Left) */}
         <div className="flex items-center gap-4 shrink-0">
-          <button
-            onClick={() => setShowSidebar(!showSidebar)}
-            className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 no-drag transition-colors"
-          >
-            {showSidebar ? (
-              <PanelLeftClose size={20} />
-            ) : (
-              <PanelLeftOpen size={20} />
-            )}
-          </button>
+          <Tooltip content={showSidebar ? "Close Sidebar" : "Open Sidebar"} side="bottom">
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 no-drag transition-colors"
+            >
+              {showSidebar ? (
+                <PanelLeftClose size={20} />
+              ) : (
+                <PanelLeftOpen size={20} />
+              )}
+            </button>
+          </Tooltip>
           {/* LOGO */}
           <div className="flex items-center gap-3 select-none px-2 py-3">
             {/* The Image */}
-            <img
-              src={appLogo}
-              alt="Tree File Logo"
-              className="w-8 h-8 rounded-lg shadow-md object-cover"
+            <img 
+              src={appLogo} 
+              alt="Tree File Logo" 
+              className="w-8 h-8 rounded-lg shadow-md object-cover" 
             />
-
+            
             {/* The Text */}
             <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500 dark:from-indigo-400 dark:to-purple-400 truncate hidden md:block">
               Tree File
@@ -206,30 +217,32 @@ const Toolbar: React.FC<ToolbarProps> = ({
           <div className="flex items-center gap-3 flex-1 justify-start max-w-3xl no-drag px-4">
             {/* Undo/Redo */}
             <div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-lg shrink-0 mr-2 border border-slate-200 dark:border-slate-700">
-              <button
-                onClick={onUndo}
-                disabled={!canUndo}
-                className={`p-1.5 rounded transition-colors ${
-                  canUndo
-                    ? "text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 shadow-sm"
-                    : "text-slate-300 dark:text-slate-700 cursor-not-allowed"
-                }`}
-                title="Undo (Ctrl+Z)"
-              >
-                <Undo2 size={14} />
-              </button>
-              <button
-                onClick={onRedo}
-                disabled={!canRedo}
-                className={`p-1.5 rounded transition-colors ${
-                  canRedo
-                    ? "text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 shadow-sm"
-                    : "text-slate-300 dark:text-slate-700 cursor-not-allowed"
-                }`}
-                title="Redo (Ctrl+Y)"
-              >
-                <Redo2 size={14} />
-              </button>
+              <Tooltip content="Undo (Ctrl+Z)" side="bottom">
+                <button
+                  onClick={onUndo}
+                  disabled={!canUndo}
+                  className={`p-1.5 rounded transition-colors ${
+                    canUndo
+                      ? "text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 shadow-sm"
+                      : "text-slate-300 dark:text-slate-700 cursor-not-allowed"
+                  }`}
+                >
+                  <Undo2 size={14} />
+                </button>
+              </Tooltip>
+              <Tooltip content="Redo (Ctrl+Y)" side="bottom">
+                <button
+                  onClick={onRedo}
+                  disabled={!canRedo}
+                  className={`p-1.5 rounded transition-colors ${
+                    canRedo
+                      ? "text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 shadow-sm"
+                      : "text-slate-300 dark:text-slate-700 cursor-not-allowed"
+                  }`}
+                >
+                  <Redo2 size={14} />
+                </button>
+              </Tooltip>
             </div>
 
             {/* View Toggle */}
@@ -293,17 +306,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
             <>
               {/* Data Cleanup Tools Menu */}
               <div className="relative">
-                <button
-                  onClick={() => setShowToolsMenu(!showToolsMenu)}
-                  className="p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 bg-pink-50 text-pink-700 hover:bg-pink-100 hover:text-pink-800 dark:bg-pink-900/20 dark:text-pink-400 dark:hover:bg-pink-900/40 dark:hover:text-pink-300 border border-pink-200 dark:border-pink-900/50"
-                  title="Data Cleanup Tools"
-                >
-                  <Wrench size={14} />
-                  <span className="hidden xl:inline text-xs font-medium">
-                    Tools
-                  </span>
-                  <ChevronDown size={12} className="opacity-50" />
-                </button>
+                <Tooltip content="Clean & Sort Data" side="bottom">
+                  <button
+                    onClick={() => setShowToolsMenu(!showToolsMenu)}
+                    className="p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 bg-pink-50 text-pink-700 hover:bg-pink-100 hover:text-pink-800 dark:bg-pink-900/20 dark:text-pink-400 dark:hover:bg-pink-900/40 dark:hover:text-pink-300 border border-pink-200 dark:border-pink-900/50"
+                  >
+                    <Wrench size={14} />
+                    <span className="hidden xl:inline text-xs font-medium">
+                      Tools
+                    </span>
+                    <ChevronDown size={12} className="opacity-50" />
+                  </button>
+                </Tooltip>
                 {showToolsMenu && (
                   <>
                     <div
@@ -365,17 +379,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
               {/* Convert Menu */}
               <div className="relative">
-                <button
-                  onClick={() => setShowConvertMenu(!showConvertMenu)}
-                  className="p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40 dark:hover:text-indigo-300 border border-indigo-200 dark:border-indigo-900/50"
-                  title="Convert Format"
-                >
-                  <ArrowRightLeft size={14} />
-                  <span className="hidden xl:inline text-xs font-medium">
-                    Convert
-                  </span>
-                  <ChevronDown size={12} className="opacity-50" />
-                </button>
+                <Tooltip content="Convert File Format" side="bottom">
+                  <button
+                    onClick={() => setShowConvertMenu(!showConvertMenu)}
+                    className="p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40 dark:hover:text-indigo-300 border border-indigo-200 dark:border-indigo-900/50"
+                  >
+                    <ArrowRightLeft size={14} />
+                    <span className="hidden xl:inline text-xs font-medium">
+                      Convert
+                    </span>
+                    <ChevronDown size={12} className="opacity-50" />
+                  </button>
+                </Tooltip>
                 {showConvertMenu && (
                   <>
                     <div
@@ -404,29 +419,31 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
               {/* Export JSON Button */}
               {onExportJson && activeFile.format !== "json" && (
-                <button
-                  onClick={onExportJson}
-                  className="p-1.5 px-3 rounded-lg transition-colors flex items-center gap-2 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 hover:text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 dark:hover:bg-yellow-900/40 dark:hover:text-yellow-300 border border-yellow-200 dark:border-yellow-900/50"
-                  title="Export to JSON"
-                >
-                  <Download size={14} />
-                  <span className="hidden xl:inline text-xs font-medium">
-                    Export
-                  </span>
-                </button>
+                <Tooltip content="Export as JSON file" side="bottom">
+                  <button
+                    onClick={onExportJson}
+                    className="p-1.5 px-3 rounded-lg transition-colors flex items-center gap-2 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 hover:text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 dark:hover:bg-yellow-900/40 dark:hover:text-yellow-300 border border-yellow-200 dark:border-yellow-900/50"
+                  >
+                    <Download size={14} />
+                    <span className="hidden xl:inline text-xs font-medium">
+                      Export
+                    </span>
+                  </button>
+                </Tooltip>
               )}
 
               {/* Get Types Button (New) */}
-              <button
-                onClick={onOpenTypeGenerator}
-                className="p-1.5 px-3 rounded-lg transition-colors flex items-center gap-2 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 hover:text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-400 dark:hover:bg-cyan-900/40 dark:hover:text-cyan-300 border border-cyan-200 dark:border-cyan-900/50"
-                title="Generate TypeScript Interfaces"
-              >
-                <Terminal size={14} />
-                <span className="hidden xl:inline text-xs font-medium">
-                  Get Types
-                </span>
-              </button>
+              <Tooltip content="Generate TypeScript Interfaces" side="bottom">
+                <button
+                  onClick={onOpenTypeGenerator}
+                  className="p-1.5 px-3 rounded-lg transition-colors flex items-center gap-2 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 hover:text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-400 dark:hover:bg-cyan-900/40 dark:hover:text-cyan-300 border border-cyan-200 dark:border-cyan-900/50"
+                >
+                  <Terminal size={14} />
+                  <span className="hidden xl:inline text-xs font-medium">
+                    Get Types
+                  </span>
+                </button>
+              </Tooltip>
 
               <div className="w-px h-5 bg-slate-300 dark:bg-slate-800 mx-1"></div>
 
@@ -434,119 +451,131 @@ const Toolbar: React.FC<ToolbarProps> = ({
               {viewMode === "raw" && (
                 <div className="flex items-center gap-1">
                   {setShowLineNumbers && (
-                    <button
-                      onClick={() => setShowLineNumbers(!showLineNumbers)}
-                      className={`p-1.5 rounded transition-all ${
-                        showLineNumbers
-                          ? "bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-200 dark:border-slate-700"
-                          : "text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                      }`}
-                      title="Toggle Line Numbers"
-                    >
-                      <ListOrdered size={18} />
-                    </button>
+                    <Tooltip content="Toggle Line Numbers" side="bottom">
+                      <button
+                        onClick={() => setShowLineNumbers(!showLineNumbers)}
+                        className={`p-1.5 rounded transition-all ${
+                          showLineNumbers
+                            ? "bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-200 dark:border-slate-700"
+                            : "text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        <ListOrdered size={18} />
+                      </button>
+                    </Tooltip>
                   )}
-                  <button
-                    onClick={onFormat}
-                    className="p-1.5 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    title="Format (Pretty Print)"
-                  >
-                    <AlignLeft size={18} />
-                  </button>
-                  <button
-                    onClick={onMinify}
-                    disabled={activeFile.format === "yaml"}
-                    className={`p-1.5 rounded transition-colors ${
-                      activeFile.format === "yaml"
-                        ? "text-slate-300 dark:text-slate-700 cursor-not-allowed"
-                        : "text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                    }`}
-                    title="Minify (Compact)"
-                  >
-                    <Minimize size={18} />
-                  </button>
+                  
+                  {isFormatSupported && (
+                    <>
+                      <Tooltip content="Format (Pretty Print)" side="bottom">
+                        <button
+                          onClick={onFormat}
+                          className={`p-1.5 rounded transition-colors ${
+                            isPrettyActive 
+                              ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 shadow-sm"
+                              : "text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          }`}
+                        >
+                          <AlignLeft size={18} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="Minify (Compact)" side="bottom">
+                        <button
+                          onClick={onMinify}
+                          className={`p-1.5 rounded transition-colors ${
+                            isCompactActive
+                              ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 shadow-sm"
+                              : "text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          }`}
+                        >
+                          <Minimize size={18} />
+                        </button>
+                      </Tooltip>
+                    </>
+                  )}
                 </div>
               )}
 
               {/* Tree Controls (Sort buttons removed as requested) */}
               {viewMode === "tree" && (
                 <div className="flex items-center gap-1">
-                  <button
-                    onClick={toggleExpandAll}
-                    className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                    title={
-                      viewSettings.expandedLevel > 1
-                        ? "Collapse All"
-                        : "Expand All"
-                    }
-                  >
-                    {viewSettings.expandedLevel > 1 ? (
-                      <ChevronsUp size={18} />
-                    ) : (
-                      <ChevronsDown size={18} />
-                    )}
-                  </button>
+                  <Tooltip content={viewSettings.expandedLevel > 1 ? "Collapse All" : "Expand All"} side="bottom">
+                    <button
+                      onClick={toggleExpandAll}
+                      className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                    >
+                      {viewSettings.expandedLevel > 1 ? (
+                        <ChevronsUp size={18} />
+                      ) : (
+                        <ChevronsDown size={18} />
+                      )}
+                    </button>
+                  </Tooltip>
                 </div>
               )}
 
               {/* Copy Button */}
-              <button
-                onClick={onCopy}
-                className="p-1.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                title="Copy Full Text"
-              >
-                {copySuccess ? (
-                  <Check size={18} className="text-green-600" />
-                ) : (
-                  <Copy size={18} />
-                )}
-              </button>
+              <Tooltip content={copySuccess ? "Copied!" : "Copy Full Text"} side="bottom">
+                <button
+                  onClick={onCopy}
+                  className="p-1.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  {copySuccess ? (
+                    <Check size={18} className="text-green-600" />
+                  ) : (
+                    <Copy size={18} />
+                  )}
+                </button>
+              </Tooltip>
 
               <div className="w-px h-5 bg-slate-300 dark:bg-slate-800 mx-1"></div>
             </>
           )}
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={onOpenHistory}
-              className={`p-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm ${
-                activeView === "history"
-                  ? "bg-violet-600 text-white"
-                  : "bg-violet-50 text-violet-600 hover:bg-violet-100 dark:bg-violet-900/40 dark:text-violet-300 dark:hover:bg-violet-900/60 border border-violet-200 dark:border-violet-800"
-              }`}
-              title="History"
-            >
-              <History size={20} />
-            </button>
+            <Tooltip content="Recent Files History" side="bottom">
+              <button
+                onClick={onOpenHistory}
+                className={`p-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm ${
+                  activeView === "history"
+                    ? "bg-violet-600 text-white"
+                    : "bg-violet-50 text-violet-600 hover:bg-violet-100 dark:bg-violet-900/40 dark:text-violet-300 dark:hover:bg-violet-900/60 border border-violet-200 dark:border-violet-800"
+                }`}
+              >
+                <History size={20} />
+              </button>
+            </Tooltip>
 
             {/* Compare Button - Enhanced Visibility - Orange */}
-            <button
-              onClick={onOpenCompare}
-              className={`p-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm ${
-                activeView === "compare"
-                  ? "bg-orange-600 text-white"
-                  : "bg-orange-50 text-orange-600 hover:bg-orange-100 dark:bg-orange-900/40 dark:text-orange-300 dark:hover:bg-orange-900/60 border border-orange-200 dark:border-orange-800"
-              }`}
-              title="Compare Files"
-            >
-              <GitCompare size={20} />
-            </button>
+            <Tooltip content="Compare Files" side="bottom">
+              <button
+                onClick={onOpenCompare}
+                className={`p-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm ${
+                  activeView === "compare"
+                    ? "bg-orange-600 text-white"
+                    : "bg-orange-50 text-orange-600 hover:bg-orange-100 dark:bg-orange-900/40 dark:text-orange-300 dark:hover:bg-orange-900/60 border border-orange-200 dark:border-orange-800"
+                }`}
+              >
+                <GitCompare size={20} />
+              </button>
+            </Tooltip>
 
-            <button
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 shadow-sm hover:shadow-md hover:bg-white dark:hover:bg-slate-700 transition-all ml-1"
-              title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
-            >
-              {theme === "dark" ? (
-                <Sun
-                  size={20}
-                  className="text-yellow-500"
-                  fill="currentColor"
-                />
-              ) : (
-                <Moon size={20} className="text-blue-600" fill="currentColor" />
-              )}
-            </button>
+            <Tooltip content={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`} side="bottom">
+              <button
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 shadow-sm hover:shadow-md hover:bg-white dark:hover:bg-slate-700 transition-all ml-1"
+              >
+                {theme === "dark" ? (
+                  <Sun
+                    size={20}
+                    className="text-yellow-500"
+                    fill="currentColor"
+                  />
+                ) : (
+                  <Moon size={20} className="text-blue-600" fill="currentColor" />
+                )}
+              </button>
+            </Tooltip>
           </div>
         </div>
       </div>

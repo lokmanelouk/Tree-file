@@ -19,10 +19,11 @@ import {
   FileSpreadsheet,
   Box,
   Braces,
-  Type
+  Type,
+  HardDrive
 } from 'lucide-react';
 import { EditorFile, FileFormat, HistoryItem } from '../types';
-import { JsonStats } from '../utils/jsonUtils';
+import { JsonStats, formatFileSize } from '../utils/jsonUtils';
 
 interface SidebarProps {
   activeFile: EditorFile | undefined;
@@ -244,6 +245,14 @@ const Sidebar: React.FC<SidebarProps> = ({
               <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors rounded border border-slate-100 dark:border-slate-700">
                  <span className="text-[9px] text-slate-600 dark:text-slate-400 uppercase font-bold">Total Nodes</span>
                  <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-300">{stats.totalNodes}</span>
+              </div>
+
+              <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors rounded border border-slate-100 dark:border-slate-700">
+                 <div className="flex items-center gap-1.5 text-[9px] text-slate-600 dark:text-slate-400 uppercase font-bold">
+                    <HardDrive size={10} />
+                    <span>Size</span>
+                 </div>
+                 <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-300">{formatFileSize(activeFile.meta?.size || 0)}</span>
               </div>
           </div>
         </>
