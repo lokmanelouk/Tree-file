@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
   Layers, 
@@ -305,7 +304,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><Info size={12} /> Tips</h3>
           <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-2 list-disc pl-4 leading-relaxed">
             <li><span className="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded text-[10px] font-bold">Ctrl+O</span> to Open</li>
-            <li><span className="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded text-[10px] font-bold">Ctrl+F</span> to Search</li>
+            <li><span className="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded text-[10px] font-bold">Ctrl+K</span> for Commands</li>
             <li>Convert formats via Toolbar</li>
           </ul>
         </div>

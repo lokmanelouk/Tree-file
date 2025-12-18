@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, useTransition } from 'react';
 import { 
   Plus, 
   X, 
@@ -7,7 +6,8 @@ import {
   FileCode, 
   Database, 
   FileSpreadsheet,
-  Loader2
+  Loader2,
+  Info
 } from 'lucide-react';
 import Home from './components/Home'; 
 import Sidebar from './components/Sidebar'; 
@@ -20,14 +20,13 @@ import ConfirmModal from './components/ConfirmModal';
 import ConversionConfirmModal from './components/ConversionConfirmModal';
 import TypeGeneratorModal from './components/TypeGeneratorModal';
 import CommandPalette from './components/CommandPalette';
-import { sortJson, getJsonStats, updateValueAtPath, downloadJson } from './utils/jsonUtils';
+import { sortJson, getJsonStats, updateValueAtPath, downloadJson, JsonStats } from './utils/jsonUtils';
 import { detectFormat, parseContent, stringifyContent, minifyContent } from './utils/parserUtils';
 import { JsonValue, EditorFile, SortOrder, ViewSettings, Path, FileFormat, HistoryItem, JsonObject } from './types';
 
 type ViewState = 'home' | 'editor' | 'history' | 'compare';
 
 // --- Internal Component: FileWorkspace ---
-// Renders a specific file. Kept alive (hidden) when not active to prevent re-rendering lag.
 interface FileWorkspaceProps {
   file: EditorFile;
   isActive: boolean;
@@ -52,7 +51,6 @@ const FileWorkspace = React.memo(({
   onRawChange
 }: FileWorkspaceProps) => {
   
-  // Memoize processed JSON per file so hidden files don't re-calculate unnecessarily
   const processedJson = useMemo(() => {
     if (!file.json) return null;
     let result: JsonValue = file.json;
@@ -94,14 +92,23 @@ const FileWorkspace = React.memo(({
 function App() {
   // --- Global State ---
   const [isLoading, setIsLoading] = useState(true); 
+  const [loadingMessage, setLoadingMessage] = useState('Processing...');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [showSidebar, setShowSidebar] = useState(true);
   const [isCmdPaletteOpen, setIsCmdPaletteOpen] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
   
+  // --- React Transition State for Tab Switching ---
+  const [isPending, startTransition] = useTransition();
+  const [isSwitchingLoading, setIsSwitchingLoading] = useState(false);
+
   // --- File System State ---
   const [files, setFiles] = useState<EditorFile[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<HistoryItem[]>([]);
+  
+  // Stats State (Async calculation to prevent freezing)
+  const [currentFileStats, setCurrentFileStats] = useState<JsonStats>({ totalNodes: 0, maxDepth: 0, objects: 0, arrays: 0, primitives: 0 });
 
   // --- View State ---
   const [activeView, setActiveView] = useState<ViewState>('home');
@@ -109,7 +116,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setViewSortOrder] = useState<SortOrder>('original');
   const [viewSettings, setViewSettings] = useState<ViewSettings>({
-    expandedLevel: 1, // Default to 1: Root keys shown, children collapsed
+    expandedLevel: 1, 
     showQuotes: false,
     showCommas: false,
     fontSize: 'base'
@@ -141,6 +148,89 @@ function App() {
   // --- Drag & Drop State ---
   const [draggedFileId, setDraggedFileId] = useState<string | null>(null);
 
+  const activeFile = useMemo(() => files.find(f => f.id === activeFileId), [files, activeFileId]);
+
+  // --- HELPER: Async Action Wrapper ---
+  // This ensures the loading spinner renders BEFORE the heavy sync operation starts
+  const withLoading = useCallback((action: () => void, message: string = 'Processing...') => {
+    setLoadingMessage(message);
+    setIsLoading(true);
+    // Use setTimeout to yield to the event loop, allowing React to render the spinner
+    setTimeout(() => {
+        requestAnimationFrame(() => {
+            try {
+                action();
+            } catch (e) {
+                console.error(e);
+            } finally {
+                // Allow the heavy component to mount/render before hiding spinner
+                setTimeout(() => setIsLoading(false), 50); 
+            }
+        });
+    }, 50); 
+  }, []);
+
+  // --- Delayed Loading Effect for File Switching ---
+  useEffect(() => {
+    let timer: any;
+    if (isPending) {
+      // Delay showing loader by 500ms
+      timer = setTimeout(() => {
+        setLoadingMessage('Switching File...');
+        setIsLoading(true);
+        setIsSwitchingLoading(true);
+      }, 500);
+    } else if (isSwitchingLoading) {
+      // If transition finished and we had shown the loader, hide it
+      setIsLoading(false);
+      setIsSwitchingLoading(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isPending, isSwitchingLoading]);
+
+  // --- Stats Calculation Effect ---
+  // Calculates stats AFTER render to avoid blocking tab switching
+  useEffect(() => {
+    if (!activeFile?.json) {
+      setCurrentFileStats({ totalNodes: 0, maxDepth: 0, objects: 0, arrays: 0, primitives: 0 });
+      return;
+    }
+    
+    // Defer stats calculation to allow UI to settle first
+    const timer = setTimeout(() => {
+       const newStats = getJsonStats(activeFile.json);
+       setCurrentFileStats(newStats);
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [activeFile?.json]);
+
+  // --- Notification Timer ---
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  // --- Wrapper Handlers ---
+  const handleTabSwitch = (id: string) => {
+    if (id === activeFileId) return;
+    // Use startTransition to allow immediate UI feedback and delayed loading
+    startTransition(() => {
+      setActiveFileId(id);
+    });
+  };
+
+  const handleViewModeSwitch = (mode: 'tree' | 'raw') => {
+    if (mode === viewMode) return;
+    withLoading(() => setViewMode(mode), mode === 'tree' ? 'Building Tree...' : 'Rendering Text...');
+  };
+
+  const handleViewSortOrder = (order: SortOrder) => {
+    withLoading(() => setViewSortOrder(order), 'Sorting...');
+  };
+
   // --- Effects ---
   useEffect(() => {
     if (theme === 'dark') {
@@ -160,6 +250,11 @@ function App() {
         } catch (error) {
           console.error("Failed to load favorites:", error);
         }
+      } else {
+        const localFavs = localStorage.getItem('favorites');
+        if (localFavs) {
+           try { setFavorites(JSON.parse(localFavs)); } catch(e) {}
+        }
       }
       setTimeout(() => setIsLoading(false), 300);
     };
@@ -169,7 +264,7 @@ function App() {
   // Listen for Ctrl+K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+      if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setIsCmdPaletteOpen((prev) => !prev);
       }
@@ -230,14 +325,6 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeFileId, files]);
 
-  const activeFile = useMemo(() => files.find(f => f.id === activeFileId), [files, activeFileId]);
-
-  // Stats for Sidebar (calculated only for active file)
-  const stats = useMemo(() => {
-    if (!activeFile?.json) return { totalNodes: 0, maxDepth: 0, objects: 0, arrays: 0, primitives: 0 };
-    return getJsonStats(activeFile.json);
-  }, [activeFile?.json]);
-
   const getFileIcon = (format: FileFormat, size = 16, className = "") => {
     let colorClass = "";
     if (!className.includes("text-")) {
@@ -262,32 +349,29 @@ function App() {
 
   /**
    * Async File Loader
-   * Prevents UI freezing by using setTimeout
    */
   const handleFileLoadedAsync = (rawContent: string, name: string, size: number, path?: string) => {
-    setIsLoading(true);
-
-    // Timeout allows React to render the loading spinner before heavy processing
-    setTimeout(() => {
+    withLoading(() => {
       try {
         const format = detectFormat(name);
         let text = rawContent || '';
         let json: JsonValue = null;
         let fileSize = size;
 
-        // If file size is 0 but we have content, calculate it
+        // Safety check: If content seems to be just the path (rare edge case in some environments)
+        if (path && text.trim() === path.trim()) {
+           throw new Error("Invalid file content read (content matches path).");
+        }
+
         if (fileSize === 0 && text) {
           fileSize = new Blob([text]).size;
         }
 
-        // PERFORMANCE CHECK: 5MB Limit
         const isLargeFile = text.length > 5 * 1024 * 1024; // 5MB
 
         if (isLargeFile) {
-          // FORCE RAW MODE: Do NOT parse into JSON to save memory/CPU
-          json = {}; // Empty object for safety
+          json = {}; 
         } else {
-          // Normal parsing
           if (text.trim().length > 0) {
             json = parseContent(text, format);
           }
@@ -313,47 +397,54 @@ function App() {
         setActiveFileId(newFile.id);
         setActiveView('editor');
 
-        // View Mode Logic
         if (isLargeFile) {
           setViewMode('raw');
-          setTimeout(() => alert(`File is too large (${(fileSize / 1024 / 1024).toFixed(2)} MB). Opened in Raw Mode only for performance.`), 100);
+          setNotification(`File is large (${(fileSize / 1024 / 1024).toFixed(2)} MB). Opened in Raw Mode for performance.`);
         } else if (!text || text.trim().length === 0) {
           setViewMode('raw');
         } else {
           setViewMode('tree');
         }
 
-        // Ensure expandedLevel is reset to 1 when opening a new file to keep it closed by default
         setViewSettings(prev => ({ ...prev, expandedLevel: 1 }));
 
         if (window.electron && path) {
           window.electron.addToHistory({ name, path, format });
+        } else {
+          const historyPath = path || name; 
+          const item: HistoryItem = { name, path: historyPath, format, lastOpened: new Date().toISOString() };
+          const history = JSON.parse(localStorage.getItem('history') || '[]');
+          const newHistory = [item, ...history.filter((h: any) => h.path !== item.path)].slice(0, 50);
+          localStorage.setItem('history', JSON.stringify(newHistory));
         }
 
       } catch (e: any) {
         console.error("File Load Error:", e);
-        alert(`Failed to load file: ${e.message}`);
-      } finally {
-        setIsLoading(false);
+        // Clean error message
+        const msg = e.message.length > 100 ? e.message.substring(0, 100) + '...' : e.message;
+        alert(`Failed to load file: ${msg}`);
       }
-    }, 100);
+    }, 'Parsing File...');
   };
 
   const handleLoadFileFromPath = async (path: string, name: string) => {
     if (window.electron) {
       setIsLoading(true);
+      setLoadingMessage('Reading File...');
       try {
         const result = await window.electron.readFile(path);
-        if (result.success && result.content !== undefined) {
+        if (result.success && typeof result.content === 'string') {
           handleFileLoadedAsync(result.content, name, result.content.length, path);
         } else {
           setIsLoading(false);
-          alert(`Could not open file: ${result.error}`);
+          alert(`Could not open file: ${result.error || 'Unknown error'}`);
         }
       } catch (e: any) {
         setIsLoading(false);
         alert(`Failed to open file: ${e.message}`);
       }
+    } else {
+      alert("Cannot re-open files from history in Web Mode due to browser security.\nPlease re-upload the file.");
     }
   };
 
@@ -368,7 +459,6 @@ function App() {
       try {
         const result = await window.electron.openFileDialog();
         if (!result.canceled && result.content !== undefined && result.filePath && result.name) {
-          // Pass raw content directly to async loader
           handleFileLoadedAsync(result.content, result.name, result.content.length, result.filePath);
         }
       } catch (err) {
@@ -385,7 +475,8 @@ function App() {
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      setIsLoading(true); // Start loading immediately
+      setLoadingMessage('Reading File...');
+      setIsLoading(true);
       const reader = new FileReader();
       reader.onload = (ev) => {
         try {
@@ -458,9 +549,7 @@ function App() {
 
   const handleUpdateValue = (path: Path, newValue: JsonValue) => {
     if (!activeFileId) return;
-    // We update the active file (which triggers re-render of that specific Workspace)
-    try {
-      setFiles(prevFiles => {
+    setFiles(prevFiles => {
         const file = prevFiles.find(f => f.id === activeFileId);
         if (!file) return prevFiles;
 
@@ -477,10 +566,7 @@ function App() {
             formatStyle: 'pretty' as const
         };
         return prevFiles.map(f => f.id === activeFileId ? addToHistory(updatedFile, newText) : f);
-      });
-    } catch (e) {
-      console.error("Failed to update value", e);
-    }
+    });
   };
 
   const handleRawChange = (newText: string) => {
@@ -493,7 +579,6 @@ function App() {
 
       let newJson = file.json;
       let error = null;
-      // Only re-parse if not a massive file (5MB limit for live parsing)
       if (newText.length <= 5 * 1024 * 1024) {
         try {
           newJson = parseContent(newText, file.format);
@@ -501,7 +586,6 @@ function App() {
           error = e.message;
         }
       } else {
-          // Keep json empty for performance
           newJson = {};
       }
 
@@ -521,62 +605,66 @@ function App() {
 
   const handleFormat = () => {
     if (!activeFile) return;
-    try {
-      const currentObj = parseContent(activeFile.text, activeFile.format);
-      const formatted = stringifyContent(currentObj, activeFile.format);
-      const newSize = new Blob([formatted]).size;
-      updateActiveFile(f => ({ ...f, text: formatted, json: currentObj, error: null, isDirty: true, meta: { ...f.meta, size: newSize }, formatStyle: 'pretty' }));
-    } catch (e: any) {
-      alert("Cannot format: Invalid syntax.");
-    }
+    withLoading(() => {
+        try {
+          const currentObj = parseContent(activeFile.text, activeFile.format);
+          const formatted = stringifyContent(currentObj, activeFile.format);
+          const newSize = new Blob([formatted]).size;
+          updateActiveFile(f => ({ ...f, text: formatted, json: currentObj, error: null, isDirty: true, meta: { ...f.meta, size: newSize }, formatStyle: 'pretty' }));
+        } catch (e: any) {
+          alert("Cannot format: Invalid syntax.");
+        }
+    }, 'Formatting...');
   };
 
   const handleMinify = () => {
     if (!activeFile) return;
     if (activeFile.format === 'yaml') return; 
-    try {
-      const currentObj = parseContent(activeFile.text, activeFile.format);
-      const minified = minifyContent(currentObj, activeFile.format);
-      const newSize = new Blob([minified]).size;
-      updateActiveFile(f => ({ ...f, text: minified, json: currentObj, error: null, isDirty: true, meta: { ...f.meta, size: newSize }, formatStyle: 'compact' }));
-    } catch (e: any) {
-      alert("Cannot minify: Invalid syntax.");
-    }
+    withLoading(() => {
+        try {
+          const currentObj = parseContent(activeFile.text, activeFile.format);
+          const minified = minifyContent(currentObj, activeFile.format);
+          const newSize = new Blob([minified]).size;
+          updateActiveFile(f => ({ ...f, text: minified, json: currentObj, error: null, isDirty: true, meta: { ...f.meta, size: newSize }, formatStyle: 'compact' }));
+        } catch (e: any) {
+          alert("Cannot minify: Invalid syntax.");
+        }
+    }, 'Minifying...');
   };
 
   // --- DATA CLEANUP TOOLS ---
-  const applyJsonTool = (transform: (data: JsonValue) => JsonValue) => {
+  const applyJsonTool = (transform: (data: JsonValue) => JsonValue, label: string) => {
     if (!activeFile) return;
-    try {
-      if (activeFile.text.length > 5 * 1024 * 1024 && Object.keys(activeFile.json as object).length === 0) {
-          alert("Tool unavailable: File too large to parse safely.");
-          return;
-      }
-      
-      const newData = transform(activeFile.json);
-      const newText = stringifyContent(newData, activeFile.format);
-      const newSize = new Blob([newText]).size;
-      
-      updateActiveFile(f => {
-        const updatedFile = {
-          ...f,
-          json: newData,
-          text: newText,
-          isDirty: true,
-          meta: { ...f.meta, size: newSize }
-        };
-        return addToHistory(updatedFile, newText);
-      });
-    } catch (e: any) {
-      alert(`Tool error: ${e.message}`);
-    }
+    withLoading(() => {
+        try {
+          if (activeFile.text.length > 5 * 1024 * 1024 && Object.keys(activeFile.json as object).length === 0) {
+              alert("Tool unavailable: File too large to parse safely.");
+              return;
+          }
+          
+          const newData = transform(activeFile.json);
+          const newText = stringifyContent(newData, activeFile.format);
+          const newSize = new Blob([newText]).size;
+          
+          updateActiveFile(f => {
+            const updatedFile = {
+              ...f,
+              json: newData,
+              text: newText,
+              isDirty: true,
+              meta: { ...f.meta, size: newSize }
+            };
+            return addToHistory(updatedFile, newText);
+          });
+        } catch (e: any) {
+          alert(`Tool error: ${e.message}`);
+        }
+    }, label);
   };
 
   const recursiveRemoveNulls = (data: JsonValue): JsonValue => {
     if (Array.isArray(data)) {
-      return data
-        .map(recursiveRemoveNulls)
-        .filter(val => val !== null);
+      return data.map(recursiveRemoveNulls).filter(val => val !== null);
     }
     if (data !== null && typeof data === 'object') {
       return Object.entries(data).reduce((acc, [key, val]) => {
@@ -590,12 +678,8 @@ function App() {
   };
 
   const recursiveTrimStrings = (data: JsonValue): JsonValue => {
-    if (typeof data === 'string') {
-      return data.trim();
-    }
-    if (Array.isArray(data)) {
-      return data.map(recursiveTrimStrings);
-    }
+    if (typeof data === 'string') return data.trim();
+    if (Array.isArray(data)) return data.map(recursiveTrimStrings);
     if (data !== null && typeof data === 'object') {
       return Object.entries(data).reduce((acc, [key, val]) => {
         acc[key] = recursiveTrimStrings(val);
@@ -605,10 +689,10 @@ function App() {
     return data;
   };
 
-  const handleToolSortKeys = () => applyJsonTool((d) => sortJson(d, 'asc'));
-  const handleToolSortKeysDesc = () => applyJsonTool((d) => sortJson(d, 'desc'));
-  const handleToolRemoveNulls = () => applyJsonTool(recursiveRemoveNulls);
-  const handleToolTrimStrings = () => applyJsonTool(recursiveTrimStrings);
+  const handleToolSortKeys = () => applyJsonTool((d) => sortJson(d, 'asc'), 'Sorting Keys...');
+  const handleToolSortKeysDesc = () => applyJsonTool((d) => sortJson(d, 'desc'), 'Sorting Keys...');
+  const handleToolRemoveNulls = () => applyJsonTool(recursiveRemoveNulls, 'Removing Nulls...');
+  const handleToolTrimStrings = () => applyJsonTool(recursiveTrimStrings, 'Trimming Strings...');
   // -------------------------
 
   const initiateConvert = (target: FileFormat) => {
@@ -617,49 +701,51 @@ function App() {
 
   const performConversion = () => {
     if (!activeFile || !pendingFormat) return;
-    try {
-      let dataToConvert = activeFile.json;
-      if (activeFile.text.length > 5 * 1024 * 1024 && Object.keys(dataToConvert as object).length === 0) {
-         dataToConvert = parseContent(activeFile.text, activeFile.format);
-      }
+    withLoading(() => {
+        try {
+          let dataToConvert = activeFile.json;
+          if (activeFile.text.length > 5 * 1024 * 1024 && Object.keys(dataToConvert as object).length === 0) {
+             dataToConvert = parseContent(activeFile.text, activeFile.format);
+          }
 
-      const newText = stringifyContent(dataToConvert, pendingFormat);
-      const newSize = new Blob([newText]).size;
+          const newText = stringifyContent(dataToConvert, pendingFormat);
+          const newSize = new Blob([newText]).size;
 
-      if (pendingFormat === 'csv' && (!newText || newText.trim() === '')) {
-         alert("Conversion Warning: Resulting CSV is empty. Ensure your data structure is compatible with CSV.");
-         setPendingFormat(null);
-         return;
-      }
+          if (pendingFormat === 'csv' && (!newText || newText.trim() === '')) {
+             alert("Conversion Warning: Resulting CSV is empty. Ensure your data structure is compatible with CSV.");
+             setPendingFormat(null);
+             return;
+          }
 
-      let newName = activeFile.name;
-      const parts = newName.split('.');
-      if (parts.length > 1) {
-        parts[parts.length - 1] = pendingFormat === 'yaml' ? 'yaml' : pendingFormat === 'xml' ? 'xml' : 'json';
-        if (pendingFormat === 'csv') parts[parts.length - 1] = 'csv';
-        newName = parts.join('.');
-      } else {
-        newName = `${newName}.${pendingFormat}`;
-      }
+          let newName = activeFile.name;
+          const parts = newName.split('.');
+          if (parts.length > 1) {
+            parts[parts.length - 1] = pendingFormat === 'yaml' ? 'yaml' : pendingFormat === 'xml' ? 'xml' : 'json';
+            if (pendingFormat === 'csv') parts[parts.length - 1] = 'csv';
+            newName = parts.join('.');
+          } else {
+            newName = `${newName}.${pendingFormat}`;
+          }
 
-      updateActiveFile(f => ({
-        ...f,
-        format: pendingFormat,
-        text: newText,
-        name: newName,
-        isDirty: true,
-        error: null,
-        history: { snapshots: [newText], currentIndex: 0 },
-        meta: { ...f.meta, size: newSize },
-        formatStyle: 'pretty'
-      }));
-      
-      setViewMode('raw');
-    } catch (e: any) {
-      alert(`Conversion Failed: ${e.message}`);
-    } finally {
-      setPendingFormat(null);
-    }
+          updateActiveFile(f => ({
+            ...f,
+            format: pendingFormat,
+            text: newText,
+            name: newName,
+            isDirty: true,
+            error: null,
+            history: { snapshots: [newText], currentIndex: 0 },
+            meta: { ...f.meta, size: newSize },
+            formatStyle: 'pretty'
+          }));
+          
+          setViewMode('raw');
+        } catch (e: any) {
+          alert(`Conversion Failed: ${e.message}`);
+        } finally {
+          setPendingFormat(null);
+        }
+    }, 'Converting...');
   };
 
   const handleExportToJson = async () => {
@@ -862,27 +948,35 @@ function App() {
   };
 
   const handleToggleFavorite = async (item: HistoryItem) => {
+    // Optimistic Update
+    const isCurrentlyFav = favorites.some(f => f.path === item.path);
+    let newFavorites;
+    if (isCurrentlyFav) {
+      newFavorites = favorites.filter(f => f.path !== item.path);
+    } else {
+      newFavorites = [item, ...favorites];
+    }
+    setFavorites(newFavorites);
+
     if (window.electron) {
-      const isCurrentlyFav = favorites.some(f => f.path === item.path);
-      if (isCurrentlyFav) {
-        setFavorites(prev => prev.filter(f => f.path !== item.path));
-      } else {
-        setFavorites(prev => [item, ...prev]);
-      }
       try {
         const updated = await window.electron.toggleFavorite(item);
+        // Sync with backend truth
         setFavorites(updated);
       } catch (error) {
         console.error("Failed to toggle favorite", error);
+        // Revert on error if needed, but usually benign to leave as is
       }
+    } else {
+      localStorage.setItem('favorites', JSON.stringify(newFavorites));
     }
   };
 
   const toggleCurrentFileFavorite = () => {
-    if (activeFile && activeFile.path) {
+    if (activeFile) {
       const item: HistoryItem = {
         name: activeFile.name,
-        path: activeFile.path,
+        path: activeFile.path || activeFile.name, 
         format: activeFile.format,
         lastOpened: new Date().toISOString()
       };
@@ -919,8 +1013,8 @@ function App() {
   };
 
   const dirtyFileForModal = files.find(f => f.id === fileToCloseId);
-  const isCurrentFileFavorite = activeFile?.path 
-    ? favorites.some(f => f.path === activeFile.path) 
+  const isCurrentFileFavorite = activeFile 
+    ? favorites.some(f => f.path === (activeFile.path || activeFile.name)) 
     : false;
 
   return (
@@ -969,6 +1063,22 @@ function App() {
          />
       )}
 
+      {/* Notification Toast */}
+      {notification && (
+        <div className="fixed bottom-6 right-6 z-[60] animate-in slide-in-from-bottom-5 fade-in duration-300">
+           <div className="bg-indigo-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
+              <Info size={20} className="shrink-0" />
+              <p className="text-sm font-medium">{notification}</p>
+              <button 
+                onClick={() => setNotification(null)}
+                className="ml-2 text-indigo-200 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+           </div>
+        </div>
+      )}
+
       {showNewFileModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -1008,11 +1118,11 @@ function App() {
         setTheme={setTheme}
         activeFile={activeFile}
         viewMode={viewMode}
-        setViewMode={setViewMode}
+        setViewMode={handleViewModeSwitch} // Wrapped
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         sortOrder={sortOrder}
-        setViewSortOrder={setViewSortOrder}
+        setViewSortOrder={handleViewSortOrder} // Wrapped
         viewSettings={viewSettings}
         setViewSettings={setViewSettings}
         onFormat={handleFormat}
@@ -1044,7 +1154,7 @@ function App() {
             activeFile={activeFile}
             onNewFile={() => setShowNewFileModal(true)}
             onOpenFile={handleTriggerOpenFile}
-            stats={stats}
+            stats={currentFileStats} // Pass async stats
             onLoadFile={handleLoadFileFromPath}
             isFavorite={isCurrentFileFavorite} 
             onToggleFavorite={toggleCurrentFileFavorite}
@@ -1096,16 +1206,16 @@ function App() {
                       onDragStart={(e) => handleDragStart(e, file.id)}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, file.id)}
-                      onClick={() => setActiveFileId(file.id)}
-                      className={`group flex items-center gap-2 px-3 py-1.5 min-w-[120px] max-w-[200px] text-xs cursor-pointer border-t border-r border-l rounded-t-lg select-none transition-colors no-drag h-full mt-1 ${
+                      onClick={() => handleTabSwitch(file.id)} // Wrapped in loading
+                      className={`group flex items-center gap-2 px-3 py-1.5 min-w-[120px] max-w-[200px] text-xs cursor-pointer rounded-t-lg select-none transition-all no-drag h-full mt-1 border-r border-l ${
                         file.id === activeFileId 
-                          ? 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-blue-600 dark:text-blue-400 font-medium relative top-[1px]' 
-                          : 'bg-slate-200 dark:bg-slate-800 border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-200/80 dark:hover:bg-slate-700'
+                          ? 'bg-white dark:bg-slate-950 border-t-2 border-t-indigo-500 border-r-slate-300 dark:border-r-slate-800 border-l-slate-300 dark:border-l-slate-800 text-indigo-700 dark:text-indigo-400 font-bold relative top-[1px] z-10' 
+                          : 'bg-slate-200 dark:bg-slate-800/50 border-t border-t-transparent border-r-transparent border-l-transparent text-slate-500 dark:text-slate-500 hover:bg-slate-300 dark:hover:bg-slate-800'
                       } ${draggedFileId === file.id ? 'opacity-50' : ''}`}
                     >
                       {getFileIcon(file.format, 12, file.id === activeFileId ? '' : 'text-slate-400')}
                       <span className="truncate flex-1">{file.name}</span>
-                      {file.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>}
+                      {file.isDirty && <span className="w-2 h-2 rounded-full bg-indigo-500"></span>}
                       <button onClick={(e) => closeFile(file.id, e as any)} className="opacity-0 group-hover:opacity-100 hover:bg-slate-300 dark:hover:bg-slate-600 rounded p-0.5 text-slate-500 dark:text-slate-400"><X size={10} /></button>
                     </div>
                   ))}
@@ -1116,7 +1226,7 @@ function App() {
               {activeView === 'home' ? (
                 <div className="flex-1 flex flex-col justify-center items-center bg-white dark:bg-slate-950">
                    <Home 
-                     onFileLoaded={(name, size, path, content) => handleFileLoadedAsync(content || '', name, size, path)} 
+                     onFileLoaded={(_, name, size, path, content) => handleFileLoadedAsync(content || '', name, size, path)} 
                      onError={(msg) => alert(msg)} 
                    />
                 </div>
@@ -1141,7 +1251,7 @@ function App() {
                    {/* Fallback if no files - though ActiveView logic usually handles this */}
                    {files.length === 0 && (
                       <Home 
-                        onFileLoaded={(name, size, path, content) => handleFileLoadedAsync(content || '', name, size, path)} 
+                        onFileLoaded={(_, name, size, path, content) => handleFileLoadedAsync(content || '', name, size, path)} 
                         onError={(msg) => alert(msg)} 
                       />
                    )}
@@ -1157,8 +1267,8 @@ function App() {
          <div className="fixed inset-0 bg-black/50 z-[100] flex flex-col items-center justify-center backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-2xl flex flex-col items-center border border-slate-200 dark:border-slate-800">
                <Loader2 size={40} className="text-indigo-500 animate-spin mb-4" />
-               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Processing File...</h3>
-               <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Please wait while we parse your data.</p>
+               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{loadingMessage}</h3>
+               <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Please wait...</p>
             </div>
          </div>
       )}

@@ -8,10 +8,14 @@ import { JsonValue, FileFormat } from '../types';
  * Detects file format based on extension
  */
 export const detectFormat = (filename: string): FileFormat => {
-  const lower = filename.toLowerCase();
+  // Ensure filename is a string and trimmed to prevent crashes
+  const lower = String(filename || '').trim().toLowerCase();
+  
   if (lower.endsWith('.yaml') || lower.endsWith('.yml')) return 'yaml';
   if (lower.endsWith('.xml')) return 'xml';
   if (lower.endsWith('.csv')) return 'csv';
+  
+  // Default to JSON for .json or unknown extensions
   return 'json';
 };
 
@@ -20,7 +24,7 @@ export const detectFormat = (filename: string): FileFormat => {
  * Throws error if parsing fails.
  */
 export const parseContent = (content: string, format: FileFormat): JsonValue => {
-  if (!content.trim()) return {};
+  if (!content || !content.trim()) return {};
 
   switch (format) {
     case 'yaml':
@@ -60,6 +64,11 @@ export const parseContent = (content: string, format: FileFormat): JsonValue => 
     
     case 'json':
     default:
+      // Basic safeguard: if it looks like a file path (starts with drive letter or /), throw early
+      const trimmed = content.trim();
+      if ((/^[a-zA-Z]:\\/.test(trimmed) || trimmed.startsWith('/')) && !trimmed.includes('{') && !trimmed.includes('[')) {
+          throw new Error("Invalid JSON: Content appears to be a file path, not data.");
+      }
       return JSON.parse(content);
   }
 };

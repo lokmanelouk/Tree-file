@@ -18,7 +18,8 @@
     "baseUrl": "./",
     "paths": {
       "@/*": ["./*"]
-    }
+    },
+    "types": ["vite/client"]
   },
   "include": ["./**/*"],
   "exclude": ["node_modules", "dist", "release", "electron", "vite.config.ts"],

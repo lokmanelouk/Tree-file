@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, useTransition } from 'react';
 import { 
   Plus, 
   X, 
@@ -7,7 +6,8 @@ import {
   FileCode, 
   Database, 
   FileSpreadsheet,
-  Loader2
+  Loader2,
+  Info
 } from 'lucide-react';
 import Home from './Home'; 
 import Sidebar from './Sidebar'; 
@@ -66,6 +66,7 @@ const FileWorkspace = React.memo(({
         {viewMode === 'tree' ? (
             <TreeViewer 
               data={processedJson} 
+              format={file.format}
               error={file.error} 
               settings={viewSettings} 
               searchQuery={searchQuery} 
@@ -96,7 +97,12 @@ function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [showSidebar, setShowSidebar] = useState(true);
   const [isCmdPaletteOpen, setIsCmdPaletteOpen] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
   
+  // --- React Transition State for Tab Switching ---
+  const [isPending, startTransition] = useTransition();
+  const [isSwitchingLoading, setIsSwitchingLoading] = useState(false);
+
   // --- File System State ---
   const [files, setFiles] = useState<EditorFile[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
@@ -159,12 +165,29 @@ function App() {
                 console.error(e);
             } finally {
                 // Allow the heavy component to mount/render before hiding spinner
-                // Increased to 50ms to ensure the spinner paints before next heavy task
                 setTimeout(() => setIsLoading(false), 50); 
             }
         });
-    }, 50); // Give 50ms for spinner to appear
+    }, 50); 
   }, []);
+
+  // --- Delayed Loading Effect for File Switching ---
+  useEffect(() => {
+    let timer: any;
+    if (isPending) {
+      // Delay showing loader by 500ms
+      timer = setTimeout(() => {
+        setLoadingMessage('Switching File...');
+        setIsLoading(true);
+        setIsSwitchingLoading(true);
+      }, 500);
+    } else if (isSwitchingLoading) {
+      // If transition finished and we had shown the loader, hide it
+      setIsLoading(false);
+      setIsSwitchingLoading(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isPending, isSwitchingLoading]);
 
   // --- Stats Calculation Effect ---
   // Calculates stats AFTER render to avoid blocking tab switching
@@ -183,11 +206,21 @@ function App() {
     return () => clearTimeout(timer);
   }, [activeFile?.json]);
 
+  // --- Notification Timer ---
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   // --- Wrapper Handlers ---
   const handleTabSwitch = (id: string) => {
     if (id === activeFileId) return;
-    withLoading(() => setActiveFileId(id), 'Switching File...');
+    // Use startTransition to allow immediate UI feedback and delayed loading
+    startTransition(() => {
+      setActiveFileId(id);
+    });
   };
 
   const handleViewModeSwitch = (mode: 'tree' | 'raw') => {
@@ -232,7 +265,7 @@ function App() {
   // Listen for Ctrl+K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+      if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setIsCmdPaletteOpen((prev) => !prev);
       }
@@ -326,6 +359,11 @@ function App() {
         let json: JsonValue = null;
         let fileSize = size;
 
+        // Safety check: If content seems to be just the path (rare edge case in some environments)
+        if (path && text.trim() === path.trim()) {
+           throw new Error("Invalid file content read (content matches path).");
+        }
+
         if (fileSize === 0 && text) {
           fileSize = new Blob([text]).size;
         }
@@ -362,7 +400,7 @@ function App() {
 
         if (isLargeFile) {
           setViewMode('raw');
-          setTimeout(() => alert(`File is too large (${(fileSize / 1024 / 1024).toFixed(2)} MB). Opened in Raw Mode only for performance.`), 100);
+          setNotification(`File is large (${(fileSize / 1024 / 1024).toFixed(2)} MB). Opened in Raw Mode for performance.`);
         } else if (!text || text.trim().length === 0) {
           setViewMode('raw');
         } else {
@@ -383,7 +421,9 @@ function App() {
 
       } catch (e: any) {
         console.error("File Load Error:", e);
-        alert(`Failed to load file: ${e.message}`);
+        // Clean error message
+        const msg = e.message.length > 100 ? e.message.substring(0, 100) + '...' : e.message;
+        alert(`Failed to load file: ${msg}`);
       }
     }, 'Parsing File...');
   };
@@ -394,11 +434,11 @@ function App() {
       setLoadingMessage('Reading File...');
       try {
         const result = await window.electron.readFile(path);
-        if (result.success && result.content !== undefined) {
+        if (result.success && typeof result.content === 'string') {
           handleFileLoadedAsync(result.content, name, result.content.length, path);
         } else {
           setIsLoading(false);
-          alert(`Could not open file: ${result.error}`);
+          alert(`Could not open file: ${result.error || 'Unknown error'}`);
         }
       } catch (e: any) {
         setIsLoading(false);
@@ -1024,6 +1064,22 @@ function App() {
          />
       )}
 
+      {/* Notification Toast */}
+      {notification && (
+        <div className="fixed bottom-6 right-6 z-[60] animate-in slide-in-from-bottom-5 fade-in duration-300">
+           <div className="bg-indigo-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
+              <Info size={20} className="shrink-0" />
+              <p className="text-sm font-medium">{notification}</p>
+              <button 
+                onClick={() => setNotification(null)}
+                className="ml-2 text-indigo-200 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+           </div>
+        </div>
+      )}
+
       {showNewFileModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -1171,7 +1227,7 @@ function App() {
               {activeView === 'home' ? (
                 <div className="flex-1 flex flex-col justify-center items-center bg-white dark:bg-slate-950">
                    <Home 
-                     onFileLoaded={(name, size, path, content) => handleFileLoadedAsync(content || '', name, size, path)} 
+                     onFileLoaded={(_, name, size, path, content) => handleFileLoadedAsync(content || '', name, size, path)} 
                      onError={(msg) => alert(msg)} 
                    />
                 </div>
@@ -1196,7 +1252,7 @@ function App() {
                    {/* Fallback if no files - though ActiveView logic usually handles this */}
                    {files.length === 0 && (
                       <Home 
-                        onFileLoaded={(name, size, path, content) => handleFileLoadedAsync(content || '', name, size, path)} 
+                        onFileLoaded={(_, name, size, path, content) => handleFileLoadedAsync(content || '', name, size, path)} 
                         onError={(msg) => alert(msg)} 
                       />
                    )}

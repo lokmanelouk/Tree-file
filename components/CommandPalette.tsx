@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Command } from 'cmdk';
 import { 
@@ -6,29 +5,25 @@ import {
   FolderOpen, 
   History, 
   GitCompare, 
-  Sun, 
+  Home, 
   Moon, 
-  Home,
+  Sun, 
   AlignLeft, 
   Minimize, 
   Copy, 
   Terminal, 
-  Trash2, 
   ArrowDownAZ, 
   ArrowUpAZ, 
+  Trash2, 
   Scissors, 
-  FileJson, 
-  Database, 
-  FileCode, 
-  FileSpreadsheet 
+  ArrowRightLeft,
+  Search
 } from 'lucide-react';
 import { FileFormat } from '../types';
 
 interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  
-  // General
   onNewFile: () => void;
   onOpenFile: () => void;
   onOpenHistory: () => void;
@@ -36,25 +31,19 @@ interface CommandPaletteProps {
   onGoHome: () => void;
   onToggleTheme: () => void;
   theme: 'dark' | 'light';
-
-  // Editor Actions
   onFormat: () => void;
   onMinify: () => void;
   onCopy: () => void;
-  
-  // Tools
   onGetTypes: () => void;
   onSortKeys: () => void;
   onSortKeysDesc: () => void;
   onRemoveNulls: () => void;
   onTrimStrings: () => void;
-
-  // Convert
   onConvert: (format: FileFormat) => void;
 }
 
-const CommandPalette: React.FC<CommandPaletteProps> = ({
-  open,
+const CommandPalette: React.FC<CommandPaletteProps> = ({ 
+  open, 
   onOpenChange,
   onNewFile,
   onOpenFile,
@@ -73,151 +62,98 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
   onTrimStrings,
   onConvert
 }) => {
-  // Prevent body scroll when open
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [open]);
 
-  // Handle ESC key manually since we replaced Command.Dialog
+  // Handle Escape Key to close
   useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open) {
-        e.stopPropagation();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (open && e.key === 'Escape') {
+        e.preventDefault();
         onOpenChange(false);
       }
     };
-    if (open) {
-      document.addEventListener('keydown', handleEsc);
-    }
-    return () => document.removeEventListener('keydown', handleEsc);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open, onOpenChange]);
-
-  const run = (action: () => void) => {
-    action();
-    onOpenChange(false);
-  };
-
-  // Close when clicking the backdrop
-  const handleBackdropClick = () => {
-     onOpenChange(false);
-  };
-
-  // Prevent closing when clicking inside the modal content
-  const handleContentClick = (e: React.MouseEvent) => {
-     e.stopPropagation();
-  };
 
   if (!open) return null;
 
   return (
     <div 
-      className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200"
-      onClick={handleBackdropClick}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-100 p-4"
+      onClick={() => onOpenChange(false)}
     >
       <div 
-        className="w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-200 ring-1 ring-slate-900/5 rounded-xl"
-        onClick={handleContentClick}
+        className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-100"
+        onClick={(e) => e.stopPropagation()}
       >
-        <Command 
+        <Command
           label="Global Command Menu"
-          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden"
+          className="w-full"
           loop
         >
           <div className="flex items-center border-b border-slate-100 dark:border-slate-800 px-3">
-            <SearchIcon className="w-4 h-4 text-slate-400 mr-2" />
-            <Command.Input 
-              autoFocus
-              className="w-full py-4 text-sm bg-transparent outline-none text-slate-800 dark:text-slate-200 placeholder-slate-400 font-medium"
-              placeholder="Type a command or search..."
-            />
-            <div className="flex items-center gap-1">
-               <span 
-                 onClick={() => onOpenChange(false)}
-                 className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 cursor-pointer hover:text-slate-700 dark:hover:text-slate-300"
-                >
-                  ESC
-                </span>
-            </div>
+             <Search className="w-5 h-5 text-slate-400 mr-2" />
+             <Command.Input 
+               autoFocus
+               className="w-full py-3 bg-transparent outline-none text-slate-800 dark:text-slate-200 placeholder-slate-400 text-sm font-medium"
+               placeholder="Type a command or search..."
+             />
           </div>
+          
+          <Command.List className="max-h-[300px] overflow-y-auto p-2">
+            <Command.Empty className="py-6 text-center text-sm text-slate-500">No results found.</Command.Empty>
 
-          <Command.List className="max-h-[400px] overflow-y-auto overflow-x-hidden p-2 custom-scrollbar scroll-py-2">
-            <Command.Empty className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">
-              No results found.
-            </Command.Empty>
-
-            <Command.Group heading="General" className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-2 mt-2 select-none">
-              <Item onSelect={() => run(onNewFile)} icon={<FilePlus />}>New File</Item>
-              <Item onSelect={() => run(onOpenFile)} icon={<FolderOpen />}>Open File...</Item>
-              <Item onSelect={() => run(onGoHome)} icon={<Home />}>Go Home</Item>
-              <Item onSelect={() => run(onOpenHistory)} icon={<History />}>View History</Item>
-              <Item onSelect={() => run(onOpenCompare)} icon={<GitCompare />}>Compare Files</Item>
-              <Item onSelect={() => run(onToggleTheme)} icon={theme === 'dark' ? <Sun /> : <Moon />}>
-                Switch to {theme === 'dark' ? 'Light' : 'Dark'} Mode
-              </Item>
+            <Command.Group heading="General" className="text-xs font-bold text-slate-400 mb-2 px-2 mt-2 select-none">
+               <CommandItem onSelect={() => { onNewFile(); onOpenChange(false); }} icon={<FilePlus size={14} />} text="New File" shortcut="Ctrl+N" />
+               <CommandItem onSelect={() => { onOpenFile(); onOpenChange(false); }} icon={<FolderOpen size={14} />} text="Open File" shortcut="Ctrl+O" />
+               <CommandItem onSelect={() => { onGoHome(); onOpenChange(false); }} icon={<Home size={14} />} text="Go Home" />
+            </Command.Group>
+            
+            <Command.Group heading="View" className="text-xs font-bold text-slate-400 mb-2 px-2 mt-2 select-none">
+               <CommandItem onSelect={() => { onOpenHistory(); onOpenChange(false); }} icon={<History size={14} />} text="History" />
+               <CommandItem onSelect={() => { onOpenCompare(); onOpenChange(false); }} icon={<GitCompare size={14} />} text="Compare Files" />
+               <CommandItem onSelect={() => { onToggleTheme(); onOpenChange(false); }} icon={theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />} text="Toggle Theme" />
             </Command.Group>
 
-            <Command.Group heading="Editor Actions" className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-2 mt-4 select-none">
-              <Item onSelect={() => run(onFormat)} icon={<AlignLeft />}>Format Document (Pretty Print)</Item>
-              <Item onSelect={() => run(onMinify)} icon={<Minimize />}>Minify (Compact)</Item>
-              <Item onSelect={() => run(onCopy)} icon={<Copy />}>Copy Full Text</Item>
-              <Item onSelect={() => run(onGetTypes)} icon={<Terminal />}>Generate Types (TypeScript)</Item>
+            <Command.Group heading="Editor Actions" className="text-xs font-bold text-slate-400 mb-2 px-2 mt-2 select-none">
+               <CommandItem onSelect={() => { onFormat(); onOpenChange(false); }} icon={<AlignLeft size={14} />} text="Format Document" />
+               <CommandItem onSelect={() => { onMinify(); onOpenChange(false); }} icon={<Minimize size={14} />} text="Minify" />
+               <CommandItem onSelect={() => { onCopy(); onOpenChange(false); }} icon={<Copy size={14} />} text="Copy Content" />
+               <CommandItem onSelect={() => { onGetTypes(); onOpenChange(false); }} icon={<Terminal size={14} />} text="Generate TypeScript Types" />
+            </Command.Group>
+            
+             <Command.Group heading="Data Tools" className="text-xs font-bold text-slate-400 mb-2 px-2 mt-2 select-none">
+               <CommandItem onSelect={() => { onSortKeys(); onOpenChange(false); }} icon={<ArrowDownAZ size={14} />} text="Sort Keys (A-Z)" />
+               <CommandItem onSelect={() => { onSortKeysDesc(); onOpenChange(false); }} icon={<ArrowUpAZ size={14} />} text="Sort Keys (Z-A)" />
+               <CommandItem onSelect={() => { onRemoveNulls(); onOpenChange(false); }} icon={<Trash2 size={14} />} text="Remove Null Values" />
+               <CommandItem onSelect={() => { onTrimStrings(); onOpenChange(false); }} icon={<Scissors size={14} />} text="Trim Strings" />
             </Command.Group>
 
-            <Command.Group heading="Data Tools" className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-2 mt-4 select-none">
-               <Item onSelect={() => run(onSortKeys)} icon={<ArrowDownAZ />}>Sort Keys (A-Z)</Item>
-               <Item onSelect={() => run(onSortKeysDesc)} icon={<ArrowUpAZ />}>Sort Keys (Z-A)</Item>
-               <Item onSelect={() => run(onRemoveNulls)} icon={<Trash2 />}>Remove Null Values</Item>
-               <Item onSelect={() => run(onTrimStrings)} icon={<Scissors />}>Trim All Strings</Item>
-            </Command.Group>
-
-            <Command.Group heading="Convert To..." className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-2 mt-4 select-none">
-              <Item onSelect={() => run(() => onConvert('json'))} icon={<FileJson />}>Convert to JSON</Item>
-              <Item onSelect={() => run(() => onConvert('yaml'))} icon={<Database />}>Convert to YAML</Item>
-              <Item onSelect={() => run(() => onConvert('xml'))} icon={<FileCode />}>Convert to XML</Item>
-              <Item onSelect={() => run(() => onConvert('csv'))} icon={<FileSpreadsheet />}>Convert to CSV</Item>
+             <Command.Group heading="Convert To" className="text-xs font-bold text-slate-400 mb-2 px-2 mt-2 select-none">
+               <CommandItem onSelect={() => { onConvert('json'); onOpenChange(false); }} icon={<ArrowRightLeft size={14} />} text="Convert to JSON" />
+               <CommandItem onSelect={() => { onConvert('yaml'); onOpenChange(false); }} icon={<ArrowRightLeft size={14} />} text="Convert to YAML" />
+               <CommandItem onSelect={() => { onConvert('xml'); onOpenChange(false); }} icon={<ArrowRightLeft size={14} />} text="Convert to XML" />
+               <CommandItem onSelect={() => { onConvert('csv'); onOpenChange(false); }} icon={<ArrowRightLeft size={14} />} text="Convert to CSV" />
             </Command.Group>
 
           </Command.List>
-          
-          <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 px-4 py-2 flex items-center justify-between text-[10px] text-slate-400">
-             <span>Use arrow keys to navigate</span>
-             <span>Enter to select</span>
-          </div>
         </Command>
       </div>
     </div>
   );
 };
 
-// Helper components for styling
-interface ItemProps {
-  children?: React.ReactNode;
-  icon: React.ReactNode;
-  onSelect: () => void;
-}
-
-const Item: React.FC<ItemProps> = ({ children, icon, onSelect }) => {
+const CommandItem = ({ onSelect, icon, text, shortcut }: any) => {
   return (
-    <Command.Item
+    <Command.Item 
       onSelect={onSelect}
-      className="flex items-center gap-3 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-300 rounded-lg cursor-pointer aria-selected:bg-indigo-600 aria-selected:text-white transition-colors group data-[selected=true]:bg-indigo-600 data-[selected=true]:text-white"
+      className="flex items-center gap-2 px-2 py-2 text-sm text-slate-700 dark:text-slate-300 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer aria-selected:bg-blue-600 aria-selected:text-white transition-colors"
     >
-      {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { 
-        size: 16, 
-        className: "text-slate-400 group-data-[selected=true]:text-indigo-200 transition-colors" 
-      }) : icon}
-      <span>{children}</span>
+      {icon}
+      <span>{text}</span>
+      {shortcut && <span className="ml-auto text-xs opacity-50 font-mono">{shortcut}</span>}
     </Command.Item>
-  );
-};
-
-const SearchIcon = ({ className }: { className?: string }) => (
-  <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-);
+  )
+}
 
 export default CommandPalette;

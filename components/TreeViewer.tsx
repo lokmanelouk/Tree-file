@@ -1,8 +1,8 @@
-
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { AlertOctagon, FileX, Copy, Code2, Link2, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { AlertOctagon, FileX, Copy, Code2, Link2, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
 import JsonNode from './JsonNode';
-import { JsonValue, ViewSettings, OnUpdateValue, Path } from '../types';
+import { JsonValue, ViewSettings, OnUpdateValue, Path, FileFormat } from '../types';
+import { hasSearchMatch } from '../utils/jsonUtils';
 
 interface TreeViewerProps {
   data: JsonValue | null;
@@ -10,6 +10,7 @@ interface TreeViewerProps {
   settings: ViewSettings;
   searchQuery: string;
   onUpdate: OnUpdateValue;
+  format?: FileFormat;
 }
 
 interface ContextMenuState {
@@ -20,12 +21,136 @@ interface ContextMenuState {
   key: string | number;
 }
 
+/**
+ * Internal Table Viewer for CSV/Flat Data
+ */
+const TableViewer: React.FC<{
+  data: any[];
+  visibleCount: number;
+  searchQuery: string;
+}> = ({ data, visibleCount, searchQuery }) => {
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+
+  // Extract columns from the first item
+  const columns = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    // Use the keys of the first object as columns
+    const firstItem = data[0];
+    return typeof firstItem === 'object' && firstItem !== null ? Object.keys(firstItem) : [];
+  }, [data]);
+
+  // Handle Sorting and Filtering
+  const processedData = useMemo(() => {
+    let result = [...data];
+
+    // 1. Filter
+    if (searchQuery) {
+      result = result.filter(row => hasSearchMatch(row, searchQuery));
+    }
+
+    // 2. Sort
+    if (sortConfig) {
+      result.sort((a, b) => {
+        const valA = a[sortConfig.key];
+        const valB = b[sortConfig.key];
+
+        if (valA === valB) return 0;
+        
+        // Handle numbers correctly
+        const numA = Number(valA);
+        const numB = Number(valB);
+        if (!isNaN(numA) && !isNaN(numB)) {
+            return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
+        }
+
+        // Default string comparison
+        const strA = String(valA ?? '').toLowerCase();
+        const strB = String(valB ?? '').toLowerCase();
+        
+        if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [data, sortConfig, searchQuery]);
+
+  const handleSort = (key: string) => {
+    setSortConfig(current => {
+      if (current?.key === key) {
+        return { key, direction: current.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
+  const visibleData = processedData.slice(0, visibleCount);
+  const totalFiltered = processedData.length;
+
+  if (columns.length === 0) {
+     return <div className="p-8 text-center text-slate-500">No tabular data found to display.</div>;
+  }
+
+  return (
+    <div className="w-full overflow-x-auto pb-4">
+       <table className="w-full text-left text-sm border-collapse">
+         <thead className="bg-slate-100 dark:bg-slate-800 sticky top-0 z-10 shadow-sm">
+           <tr>
+             <th className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-12 text-center select-none">#</th>
+             {columns.map(col => (
+               <th 
+                 key={col} 
+                 className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors select-none whitespace-nowrap"
+                 onClick={() => handleSort(col)}
+               >
+                 <div className="flex items-center gap-1">
+                   {col}
+                   {sortConfig?.key === col && (
+                     sortConfig.direction === 'asc' ? <ArrowUp size={12} className="text-blue-500" /> : <ArrowDown size={12} className="text-blue-500" />
+                   )}
+                 </div>
+               </th>
+             ))}
+           </tr>
+         </thead>
+         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+           {visibleData.map((row, idx) => (
+             <tr key={idx} className="hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors group">
+               <td className="px-4 py-1.5 text-xs text-slate-400 font-mono text-center border-r border-slate-100 dark:border-slate-800">{idx + 1}</td>
+               {columns.map(col => (
+                 <td key={col} className="px-4 py-1.5 text-slate-600 dark:text-slate-300 whitespace-nowrap max-w-[300px] truncate" title={String(row[col])}>
+                    {row[col] === null ? <span className="italic text-slate-400">null</span> : String(row[col])}
+                 </td>
+               ))}
+             </tr>
+           ))}
+           {visibleData.length === 0 && (
+             <tr>
+               <td colSpan={columns.length + 1} className="p-8 text-center text-slate-500 italic">
+                  No matching records found.
+               </td>
+             </tr>
+           )}
+         </tbody>
+       </table>
+       {totalFiltered > visibleCount && (
+          <div className="p-4 text-center text-xs text-slate-400">
+             Showing {visibleCount} of {totalFiltered} rows
+          </div>
+       )}
+    </div>
+  );
+};
+
+
 const TreeViewer: React.FC<TreeViewerProps> = ({ 
   data, 
   error, 
   settings, 
   searchQuery, 
-  onUpdate 
+  onUpdate,
+  format
 }) => {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   
@@ -36,7 +161,7 @@ const TreeViewer: React.FC<TreeViewerProps> = ({
   // Reset visible count when data changes or search changes
   useEffect(() => {
     setVisibleCount(50);
-  }, [data, searchQuery]);
+  }, [data, searchQuery, format]);
 
   // Infinite Scroll Observer
   useEffect(() => {
@@ -132,7 +257,18 @@ const TreeViewer: React.FC<TreeViewerProps> = ({
     );
   }
 
-  // Determine items to render
+  // --- CSV TABLE RENDER ---
+  if (format === 'csv' && Array.isArray(data)) {
+     return (
+       <div className={`h-full flex flex-col ${settings.fontSize === 'sm' ? 'text-xs' : settings.fontSize === 'lg' ? 'text-base' : 'text-sm'}`}>
+          <TableViewer data={data} visibleCount={visibleCount} searchQuery={searchQuery} />
+          {/* Reuse sentinel for infinite scroll if array is huge */}
+          <div ref={bottomRef} className="h-4 w-full" />
+       </div>
+     );
+  }
+
+  // --- STANDARD TREE RENDER ---
   let itemsToRender: React.ReactElement[] = [];
   let totalItems = 0;
 
