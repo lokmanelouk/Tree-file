@@ -14,6 +14,7 @@
     "electron:build": "npm run build && electron-builder"
   },
   "dependencies": {
+    "@google/genai": "^1.34.0",
     "cmdk": "^1.0.0",
     "electron-squirrel-startup": "^1.0.1",
     "fast-xml-parser": "^4.3.2",

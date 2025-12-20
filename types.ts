@@ -57,6 +57,14 @@ export interface HistoryItem {
   size?: number;
 }
 
+// FIX: Added optional isError property to support error message display in the AI Assistant
+export interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
+  timestamp: number;
+  isError?: boolean;
+}
+
 // Electron API Definition
 declare global {
   interface Window {

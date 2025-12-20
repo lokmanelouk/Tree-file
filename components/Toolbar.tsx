@@ -33,10 +33,10 @@ import {
   Trash2,
   Scissors,
   Terminal,
+  FolderTree
 } from "lucide-react";
 import { EditorFile, FileFormat, SortOrder, ViewSettings } from "../types";
 import Tooltip from "./Tooltip";
-import appLogo from '../assets/icon.png';
 
 interface ToolbarProps {
   showSidebar: boolean;
@@ -44,8 +44,8 @@ interface ToolbarProps {
   theme: "dark" | "light";
   setTheme: (theme: "dark" | "light") => void;
   activeFile: EditorFile | undefined;
-  viewMode: "tree" | "raw";
-  setViewMode: (mode: "tree" | "raw") => void;
+  viewMode: "tree" | "table" | "raw";
+  setViewMode: (mode: "tree" | "table" | "raw") => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   sortOrder: SortOrder;
@@ -170,19 +170,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
   const isEditorView = activeView === "editor" || activeView === "home";
   
-  // Format check: YAML and CSV do not support standard "Pretty/Minify" toggling in the same way JSON/XML do
-  // so we hide these buttons for them.
+  // Format check: YAML and CSV do not support standard "Pretty/Minify" toggling
   const isFormatSupported = activeFile && !['yaml', 'csv'].includes(activeFile.format);
   
-  // Visual active state for formatting buttons
   const isPrettyActive = activeFile?.formatStyle === 'pretty';
   const isCompactActive = activeFile?.formatStyle === 'compact';
 
+  const isCsv = activeFile?.format === 'csv';
+  const isVisualActive = viewMode === 'tree' || viewMode === 'table';
+
   return (
     <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 relative z-30">
-      {/* Single Toolbar Row */}
       <div className="h-14 flex items-center px-4 justify-between gap-4 select-none draggable-region">
-        {/* GROUP 1: Sidebar Toggle & Logo (Left) */}
         <div className="flex items-center gap-4 shrink-0">
           <Tooltip content={showSidebar ? "Close Sidebar" : "Open Sidebar"} side="bottom">
             <button
@@ -196,26 +195,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
               )}
             </button>
           </Tooltip>
-          {/* LOGO */}
           <div className="flex items-center gap-3 select-none px-2 py-3">
-            {/* The Image */}
-            <img 
-              src={appLogo} 
-              alt="Tree File Logo" 
-              className="w-8 h-8 rounded-lg shadow-md object-cover" 
-            />
-            
-            {/* The Text */}
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-md text-white">
+               <FolderTree size={18} />
+            </div>
             <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500 dark:from-indigo-400 dark:to-purple-400 truncate hidden md:block">
               Tree File
             </h1>
           </div>
         </div>
 
-        {/* GROUP 2: View Controls & Search (Center) - Only visible in Editor */}
         {activeFile && isEditorView && (
           <div className="flex items-center gap-3 flex-1 justify-start max-w-3xl no-drag px-4">
-            {/* Undo/Redo */}
             <div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-lg shrink-0 mr-2 border border-slate-200 dark:border-slate-700">
               <Tooltip content="Undo (Ctrl+Z)" side="bottom">
                 <button
@@ -245,18 +236,17 @@ const Toolbar: React.FC<ToolbarProps> = ({
               </Tooltip>
             </div>
 
-            {/* View Toggle */}
             <div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-lg shrink-0 border border-slate-200 dark:border-slate-700">
               <button
-                onClick={() => setViewMode("tree")}
+                onClick={() => setViewMode(isCsv ? "table" : "tree")}
                 className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 transition-all ${
-                  viewMode === "tree"
+                  isVisualActive
                     ? "bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-400 shadow-sm"
                     : "text-slate-600 hover:text-slate-800 dark:hover:text-slate-300"
                 }`}
               >
-                <ListTree size={14} />{" "}
-                <span className="hidden lg:inline">Tree</span>
+                {isCsv ? <FileSpreadsheet size={14} /> : <ListTree size={14} />}
+                <span className="hidden lg:inline">{isCsv ? "Table" : "Tree"}</span>
               </button>
               <button
                 onClick={() => setViewMode("raw")}
@@ -270,7 +260,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
               </button>
             </div>
 
-            {/* Search */}
             <div className="relative flex-1 w-full max-w-md group transition-all duration-300 focus-within:scale-[1.01] ml-4">
               <Search
                 size={14}
@@ -300,11 +289,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
           </div>
         )}
 
-        {/* GROUP 3: Tools & Global Actions (Right) */}
         <div className="flex items-center gap-2 no-drag shrink-0 justify-end">
           {activeFile && isEditorView && (
             <>
-              {/* Data Cleanup Tools Menu */}
               <div className="relative">
                 <Tooltip content="Clean & Sort Data" side="bottom">
                   <button
@@ -328,7 +315,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                       <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                         Cleanup Actions
                       </div>
-
                       <button
                         onClick={() => {
                           onToolSortKeys();
@@ -339,7 +325,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                         <ArrowDownAZ size={14} className="text-blue-500" /> Sort
                         Keys (A-Z)
                       </button>
-
                       <button
                         onClick={() => {
                           onToolSortKeysDesc();
@@ -350,7 +335,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                         <ArrowUpAZ size={14} className="text-blue-500" /> Sort
                         Keys (Z-A)
                       </button>
-
                       <button
                         onClick={() => {
                           onToolRemoveNulls();
@@ -361,7 +345,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                         <Trash2 size={14} className="text-red-500" /> Remove
                         Nulls
                       </button>
-
                       <button
                         onClick={() => {
                           onToolTrimStrings();
@@ -377,7 +360,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 )}
               </div>
 
-              {/* Convert Menu */}
               <div className="relative">
                 <Tooltip content="Convert File Format" side="bottom">
                   <button
@@ -417,7 +399,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 )}
               </div>
 
-              {/* Export JSON Button */}
               {onExportJson && activeFile.format !== "json" && (
                 <Tooltip content="Export as JSON file" side="bottom">
                   <button
@@ -432,7 +413,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 </Tooltip>
               )}
 
-              {/* Get Types Button (New) */}
               <Tooltip content="Generate TypeScript Interfaces" side="bottom">
                 <button
                   onClick={onOpenTypeGenerator}
@@ -447,7 +427,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
               <div className="w-px h-5 bg-slate-300 dark:bg-slate-800 mx-1"></div>
 
-              {/* Raw Controls */}
               {viewMode === "raw" && (
                 <div className="flex items-center gap-1">
                   {setShowLineNumbers && (
@@ -464,7 +443,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                       </button>
                     </Tooltip>
                   )}
-                  
                   {isFormatSupported && (
                     <>
                       <Tooltip content="Format (Pretty Print)" side="bottom">
@@ -496,7 +474,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 </div>
               )}
 
-              {/* Tree Controls (Sort buttons removed as requested) */}
               {viewMode === "tree" && (
                 <div className="flex items-center gap-1">
                   <Tooltip content={viewSettings.expandedLevel > 1 ? "Collapse All" : "Expand All"} side="bottom">
@@ -514,7 +491,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 </div>
               )}
 
-              {/* Copy Button */}
               <Tooltip content={copySuccess ? "Copied!" : "Copy Full Text"} side="bottom">
                 <button
                   onClick={onCopy}
@@ -546,7 +522,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
               </button>
             </Tooltip>
 
-            {/* Compare Button - Enhanced Visibility - Orange */}
             <Tooltip content="Compare Files" side="bottom">
               <button
                 onClick={onOpenCompare}
@@ -566,11 +541,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 shadow-sm hover:shadow-md hover:bg-white dark:hover:bg-slate-700 transition-all ml-1"
               >
                 {theme === "dark" ? (
-                  <Sun
-                    size={20}
-                    className="text-yellow-500"
-                    fill="currentColor"
-                  />
+                  <Sun size={20} className="text-yellow-500" fill="currentColor" />
                 ) : (
                   <Moon size={20} className="text-blue-600" fill="currentColor" />
                 )}

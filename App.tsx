@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef, useCallback, useTransition } from 'react';
 import { 
   Plus, 
@@ -7,30 +8,34 @@ import {
   Database, 
   FileSpreadsheet,
   Loader2,
-  Info
+  Info,
+  Codesandbox
 } from 'lucide-react';
 import Home from './components/Home'; 
 import Sidebar from './components/Sidebar'; 
 import CodeEditor from './components/CodeEditor';
 import Toolbar from './components/Toolbar';
 import TreeViewer from './components/TreeViewer';
+import TableViewer from './components/TableViewer';
 import HistoryPage from './components/HistoryPage';
 import ComparePage from './components/ComparePage';
 import ConfirmModal from './components/ConfirmModal';
 import ConversionConfirmModal from './components/ConversionConfirmModal';
 import TypeGeneratorModal from './components/TypeGeneratorModal';
 import CommandPalette from './components/CommandPalette';
+import AiAssistant from './components/AiAssistant';
 import { sortJson, getJsonStats, updateValueAtPath, downloadJson, JsonStats } from './utils/jsonUtils';
 import { detectFormat, parseContent, stringifyContent, minifyContent } from './utils/parserUtils';
 import { JsonValue, EditorFile, SortOrder, ViewSettings, Path, FileFormat, HistoryItem, JsonObject } from './types';
 
 type ViewState = 'home' | 'editor' | 'history' | 'compare';
+type EditorViewMode = 'tree' | 'table' | 'raw';
 
 // --- Internal Component: FileWorkspace ---
 interface FileWorkspaceProps {
   file: EditorFile;
   isActive: boolean;
-  viewMode: 'tree' | 'raw';
+  viewMode: EditorViewMode;
   sortOrder: SortOrder;
   searchQuery: string;
   viewSettings: ViewSettings;
@@ -71,6 +76,11 @@ const FileWorkspace = React.memo(({
               searchQuery={searchQuery} 
               onUpdate={onUpdate}
             />
+        ) : viewMode === 'table' ? (
+            <TableViewer 
+              data={processedJson || []} 
+              searchQuery={searchQuery}
+            />
         ) : (
           <div className="h-full flex flex-col">
               <CodeEditor 
@@ -95,6 +105,7 @@ function App() {
   const [loadingMessage, setLoadingMessage] = useState('Processing...');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [showSidebar, setShowSidebar] = useState(true);
+  const [showAiAssistant, setShowAiAssistant] = useState(false);
   const [isCmdPaletteOpen, setIsCmdPaletteOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   
@@ -112,7 +123,7 @@ function App() {
 
   // --- View State ---
   const [activeView, setActiveView] = useState<ViewState>('home');
-  const [viewMode, setViewMode] = useState<'tree' | 'raw'>('tree');
+  const [viewMode, setViewMode] = useState<EditorViewMode>('tree');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setViewSortOrder] = useState<SortOrder>('original');
   const [viewSettings, setViewSettings] = useState<ViewSettings>({
@@ -150,12 +161,19 @@ function App() {
 
   const activeFile = useMemo(() => files.find(f => f.id === activeFileId), [files, activeFileId]);
 
+  // Handle CSV format to auto-switch to table mode
+  useEffect(() => {
+    if (activeFile?.format === 'csv') {
+      setViewMode('table');
+    } else if (activeFile && viewMode === 'table') {
+      setViewMode('tree');
+    }
+  }, [activeFileId, activeFile?.format, viewMode]);
+
   // --- HELPER: Async Action Wrapper ---
-  // This ensures the loading spinner renders BEFORE the heavy sync operation starts
   const withLoading = useCallback((action: () => void, message: string = 'Processing...') => {
     setLoadingMessage(message);
     setIsLoading(true);
-    // Use setTimeout to yield to the event loop, allowing React to render the spinner
     setTimeout(() => {
         requestAnimationFrame(() => {
             try {
@@ -163,40 +181,33 @@ function App() {
             } catch (e) {
                 console.error(e);
             } finally {
-                // Allow the heavy component to mount/render before hiding spinner
                 setTimeout(() => setIsLoading(false), 50); 
             }
         });
     }, 50); 
   }, []);
 
-  // --- Delayed Loading Effect for File Switching ---
   useEffect(() => {
     let timer: any;
     if (isPending) {
-      // Delay showing loader by 500ms
       timer = setTimeout(() => {
         setLoadingMessage('Switching File...');
         setIsLoading(true);
         setIsSwitchingLoading(true);
       }, 500);
     } else if (isSwitchingLoading) {
-      // If transition finished and we had shown the loader, hide it
       setIsLoading(false);
       setIsSwitchingLoading(false);
     }
     return () => clearTimeout(timer);
   }, [isPending, isSwitchingLoading]);
 
-  // --- Stats Calculation Effect ---
-  // Calculates stats AFTER render to avoid blocking tab switching
   useEffect(() => {
     if (!activeFile?.json) {
       setCurrentFileStats({ totalNodes: 0, maxDepth: 0, objects: 0, arrays: 0, primitives: 0 });
       return;
     }
     
-    // Defer stats calculation to allow UI to settle first
     const timer = setTimeout(() => {
        const newStats = getJsonStats(activeFile.json);
        setCurrentFileStats(newStats);
@@ -205,7 +216,6 @@ function App() {
     return () => clearTimeout(timer);
   }, [activeFile?.json]);
 
-  // --- Notification Timer ---
   useEffect(() => {
     if (notification) {
       const timer = setTimeout(() => setNotification(null), 4000);
@@ -213,25 +223,27 @@ function App() {
     }
   }, [notification]);
 
-  // --- Wrapper Handlers ---
   const handleTabSwitch = (id: string) => {
     if (id === activeFileId) return;
-    // Use startTransition to allow immediate UI feedback and delayed loading
     startTransition(() => {
       setActiveFileId(id);
     });
   };
 
-  const handleViewModeSwitch = (mode: 'tree' | 'raw') => {
+  const handleViewModeSwitch = (mode: EditorViewMode) => {
     if (mode === viewMode) return;
-    withLoading(() => setViewMode(mode), mode === 'tree' ? 'Building Tree...' : 'Rendering Text...');
+    const msgMap = {
+      tree: 'Building Tree...',
+      table: 'Generating Table...',
+      raw: 'Rendering Text...'
+    };
+    withLoading(() => setViewMode(mode), msgMap[mode]);
   };
 
   const handleViewSortOrder = (order: SortOrder) => {
     withLoading(() => setViewSortOrder(order), 'Sorting...');
   };
 
-  // --- Effects ---
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -240,7 +252,6 @@ function App() {
     }
   }, [theme]);
 
-  // Load Favorites on Mount
   useEffect(() => {
     const initApp = async () => {
       if (window.electron) {
@@ -261,12 +272,15 @@ function App() {
     initApp();
   }, []);
 
-  // Listen for Ctrl+K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setIsCmdPaletteOpen((prev) => !prev);
+      }
+      if ((e.key === 'j' || e.key === 'J') && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setShowAiAssistant((prev) => !prev);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -299,7 +313,6 @@ function App() {
     }
   }, [isRenaming]);
 
-  // Keyboard Shortcuts for File Ops
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
@@ -347,9 +360,6 @@ function App() {
     }
   };
 
-  /**
-   * Async File Loader
-   */
   const handleFileLoadedAsync = (rawContent: string, name: string, size: number, path?: string) => {
     withLoading(() => {
       try {
@@ -358,7 +368,6 @@ function App() {
         let json: JsonValue = null;
         let fileSize = size;
 
-        // Safety check: If content seems to be just the path (rare edge case in some environments)
         if (path && text.trim() === path.trim()) {
            throw new Error("Invalid file content read (content matches path).");
         }
@@ -402,6 +411,8 @@ function App() {
           setNotification(`File is large (${(fileSize / 1024 / 1024).toFixed(2)} MB). Opened in Raw Mode for performance.`);
         } else if (!text || text.trim().length === 0) {
           setViewMode('raw');
+        } else if (format === 'csv') {
+          setViewMode('table');
         } else {
           setViewMode('tree');
         }
@@ -420,7 +431,6 @@ function App() {
 
       } catch (e: any) {
         console.error("File Load Error:", e);
-        // Clean error message
         const msg = e.message.length > 100 ? e.message.substring(0, 100) + '...' : e.message;
         alert(`Failed to load file: ${msg}`);
       }
@@ -632,7 +642,6 @@ function App() {
     }, 'Minifying...');
   };
 
-  // --- DATA CLEANUP TOOLS ---
   const applyJsonTool = (transform: (data: JsonValue) => JsonValue, label: string) => {
     if (!activeFile) return;
     withLoading(() => {
@@ -693,7 +702,6 @@ function App() {
   const handleToolSortKeysDesc = () => applyJsonTool((d) => sortJson(d, 'desc'), 'Sorting Keys...');
   const handleToolRemoveNulls = () => applyJsonTool(recursiveRemoveNulls, 'Removing Nulls...');
   const handleToolTrimStrings = () => applyJsonTool(recursiveTrimStrings, 'Trimming Strings...');
-  // -------------------------
 
   const initiateConvert = (target: FileFormat) => {
     setPendingFormat(target);
@@ -948,7 +956,6 @@ function App() {
   };
 
   const handleToggleFavorite = async (item: HistoryItem) => {
-    // Optimistic Update
     const isCurrentlyFav = favorites.some(f => f.path === item.path);
     let newFavorites;
     if (isCurrentlyFav) {
@@ -961,11 +968,9 @@ function App() {
     if (window.electron) {
       try {
         const updated = await window.electron.toggleFavorite(item);
-        // Sync with backend truth
         setFavorites(updated);
       } catch (error) {
         console.error("Failed to toggle favorite", error);
-        // Revert on error if needed, but usually benign to leave as is
       }
     } else {
       localStorage.setItem('favorites', JSON.stringify(newFavorites));
@@ -1080,33 +1085,142 @@ function App() {
       )}
 
       {showNewFileModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <h3 className="font-semibold text-slate-800 dark:text-slate-100">Create New File</h3>
-                <button onClick={() => setShowNewFileModal(false)}><X size={20} className="text-slate-400" /></button>
-             </div>
-             <div className="p-4 flex gap-4 justify-center">
-                <button onClick={() => createNewFile('json')} className="flex flex-col items-center gap-2 p-4 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-slate-200 dark:border-slate-700 hover:border-blue-500 transition-all w-24">
-                   <FileJson size={24} className="text-yellow-500 dark:text-yellow-400" />
-                   <span className="text-xs font-medium">JSON</span>
-                </button>
-                <button onClick={() => createNewFile('yaml')} className="flex flex-col items-center gap-2 p-4 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 transition-all w-24">
-                   <Database size={24} className="text-indigo-500 dark:text-indigo-400" />
-                   <span className="text-xs font-medium">YAML</span>
-                </button>
-                <button onClick={() => createNewFile('xml')} className="flex flex-col items-center gap-2 p-4 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-orange-50 dark:hover:bg-orange-900/20 border border-slate-200 dark:border-slate-700 hover:border-orange-500 transition-all w-24">
-                   <FileCode size={24} className="text-orange-500 dark:text-orange-400" />
-                   <span className="text-xs font-medium">XML</span>
-                </button>
-                <button onClick={() => createNewFile('csv')} className="flex flex-col items-center gap-2 p-4 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/20 border border-slate-200 dark:border-slate-700 hover:border-green-500 transition-all w-24">
-                   <FileSpreadsheet size={24} className="text-green-500 dark:text-green-400" />
-                   <span className="text-xs font-medium">CSV</span>
-                </button>
-             </div>
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <h3 className="font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider text-sm">
+          Create New File
+        </h3>
+        <button
+          onClick={() => setShowNewFileModal(false)}
+          className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-150"
+        >
+          <X size={18} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" />
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="p-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+
+        {/* JSON */}
+        <button
+          onClick={() => createNewFile('json')}
+          className="
+            flex flex-col items-center gap-3 p-4 rounded-xl
+            bg-slate-50 dark:bg-slate-800
+            hover:bg-white dark:hover:bg-slate-700
+            border border-slate-200 dark:border-slate-700
+            hover:border-yellow-500 dark:hover:border-yellow-500
+            hover:shadow-lg
+            transition-[background-color,border-color,box-shadow,transform]
+            duration-150 ease-out
+            active:scale-95
+            group
+          "
+        >
+          <div className="
+            w-10 h-10 rounded-lg
+            bg-yellow-50 dark:bg-yellow-900/20
+            flex items-center justify-center
+            transition-transform duration-150 ease-out
+            group-hover:scale-110
+          ">
+            <FileJson size={24} className="text-yellow-500 dark:text-yellow-400" />
           </div>
-        </div>
-      )}
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">JSON</span>
+        </button>
+
+        {/* YAML */}
+        <button
+          onClick={() => createNewFile('yaml')}
+          className="
+            flex flex-col items-center gap-3 p-4 rounded-xl
+            bg-slate-50 dark:bg-slate-800
+            hover:bg-white dark:hover:bg-slate-700
+            border border-slate-200 dark:border-slate-700
+            hover:border-indigo-500 dark:hover:border-indigo-500
+            hover:shadow-lg
+            transition-[background-color,border-color,box-shadow,transform]
+            duration-150 ease-out
+            active:scale-95
+            group
+          "
+        >
+          <div className="
+            w-10 h-10 rounded-lg
+            bg-indigo-50 dark:bg-indigo-900/20
+            flex items-center justify-center
+            transition-transform duration-150 ease-out
+            group-hover:scale-110
+          ">
+            <Database size={24} className="text-indigo-500 dark:text-indigo-400" />
+          </div>
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">YAML</span>
+        </button>
+
+        {/* XML */}
+        <button
+          onClick={() => createNewFile('xml')}
+          className="
+            flex flex-col items-center gap-3 p-4 rounded-xl
+            bg-slate-50 dark:bg-slate-800
+            hover:bg-white dark:hover:bg-slate-700
+            border border-slate-200 dark:border-slate-700
+            hover:border-orange-500 dark:hover:border-orange-500
+            hover:shadow-lg
+            transition-[background-color,border-color,box-shadow,transform]
+            duration-150 ease-out
+            active:scale-95
+            group
+          "
+        >
+          <div className="
+            w-10 h-10 rounded-lg
+            bg-orange-50 dark:bg-orange-900/20
+            flex items-center justify-center
+            transition-transform duration-150 ease-out
+            group-hover:scale-110
+          ">
+            <FileCode size={24} className="text-orange-500 dark:text-orange-400" />
+          </div>
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">XML</span>
+        </button>
+
+        {/* CSV */}
+        <button
+          onClick={() => createNewFile('csv')}
+          className="
+            flex flex-col items-center gap-3 p-4 rounded-xl
+            bg-slate-50 dark:bg-slate-800
+            hover:bg-white dark:hover:bg-slate-700
+            border border-slate-200 dark:border-slate-700
+            hover:border-green-500 dark:hover:border-green-500
+            hover:shadow-lg
+            transition-[background-color,border-color,box-shadow,transform]
+            duration-150 ease-out
+            active:scale-95
+            group
+          "
+        >
+          <div className="
+            w-10 h-10 rounded-lg
+            bg-green-50 dark:bg-green-900/20
+            flex items-center justify-center
+            transition-transform duration-150 ease-out
+            group-hover:scale-110
+          ">
+            <FileSpreadsheet size={24} className="text-green-500 dark:text-green-400" />
+          </div>
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">CSV</span>
+        </button>
+
+      </div>
+    </div>
+  </div>
+)}
+
 
       <input type="file" ref={fileInputRef} onChange={handleFileInputChange} className="hidden" accept=".json,.yaml,.yml,.xml,.csv,application/json,text/yaml,text/xml,text/csv" />
 
@@ -1118,11 +1232,11 @@ function App() {
         setTheme={setTheme}
         activeFile={activeFile}
         viewMode={viewMode}
-        setViewMode={handleViewModeSwitch} // Wrapped
+        setViewMode={handleViewModeSwitch}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         sortOrder={sortOrder}
-        setViewSortOrder={handleViewSortOrder} // Wrapped
+        setViewSortOrder={handleViewSortOrder}
         viewSettings={viewSettings}
         setViewSettings={setViewSettings}
         onFormat={handleFormat}
@@ -1154,7 +1268,7 @@ function App() {
             activeFile={activeFile}
             onNewFile={() => setShowNewFileModal(true)}
             onOpenFile={handleTriggerOpenFile}
-            stats={currentFileStats} // Pass async stats
+            stats={currentFileStats}
             onLoadFile={handleLoadFileFromPath}
             isFavorite={isCurrentFileFavorite} 
             onToggleFavorite={toggleCurrentFileFavorite}
@@ -1170,99 +1284,116 @@ function App() {
           />
         )}
 
-        <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-950">
-          {activeView === 'compare' ? (
-             <ComparePage 
-                originalContent={activeFile?.text || ''}
-                originalFileName={activeFile?.name}
-                onBack={() => {
-                   if (files.length > 0) setActiveView('editor');
-                   else setActiveView('home');
-                }}
-                theme={theme}
-             />
-          ) : activeView === 'history' ? (
-             <HistoryPage 
-                onOpen={handleLoadFileFromPath} 
-                onBack={() => {
-                  if (files.length > 0) setActiveView('editor');
-                  else setActiveView('home');
-                }} 
-                favorites={favorites}
-                onToggleFavorite={handleToggleFavorite}
-                activeFilePath={activeFile?.path}
-             />
-          ) : (
-            <>
-              {activeView === 'editor' && (
-                <div 
-                  className="h-9 bg-slate-100 dark:bg-slate-900 border-b border-slate-300 dark:border-slate-800 flex items-center px-2 gap-1 overflow-x-auto draggable-region [&::-webkit-scrollbar]:hidden" 
-                  style={{ scrollbarWidth: 'none' }}
-                >
-                  {files.map(file => (
-                    <div 
-                      key={file.id}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, file.id)}
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, file.id)}
-                      onClick={() => handleTabSwitch(file.id)} // Wrapped in loading
-                      className={`group flex items-center gap-2 px-3 py-1.5 min-w-[120px] max-w-[200px] text-xs cursor-pointer rounded-t-lg select-none transition-all no-drag h-full mt-1 border-r border-l ${
-                        file.id === activeFileId 
-                          ? 'bg-white dark:bg-slate-950 border-t-2 border-t-indigo-500 border-r-slate-300 dark:border-r-slate-800 border-l-slate-300 dark:border-l-slate-800 text-indigo-700 dark:text-indigo-400 font-bold relative top-[1px] z-10' 
-                          : 'bg-slate-200 dark:bg-slate-800/50 border-t border-t-transparent border-r-transparent border-l-transparent text-slate-500 dark:text-slate-500 hover:bg-slate-300 dark:hover:bg-slate-800'
-                      } ${draggedFileId === file.id ? 'opacity-50' : ''}`}
-                    >
-                      {getFileIcon(file.format, 12, file.id === activeFileId ? '' : 'text-slate-400')}
-                      <span className="truncate flex-1">{file.name}</span>
-                      {file.isDirty && <span className="w-2 h-2 rounded-full bg-indigo-500"></span>}
-                      <button onClick={(e) => closeFile(file.id, e as any)} className="opacity-0 group-hover:opacity-100 hover:bg-slate-300 dark:hover:bg-slate-600 rounded p-0.5 text-slate-500 dark:text-slate-400"><X size={10} /></button>
-                    </div>
-                  ))}
-                   <button onClick={() => setShowNewFileModal(true)} className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors no-drag shrink-0 mt-1 ml-0.5"><Plus size={14} /></button>
-                </div>
-              )}
-
-              {activeView === 'home' ? (
-                <div className="flex-1 flex flex-col justify-center items-center bg-white dark:bg-slate-950">
-                   <Home 
-                     onFileLoaded={(_, name, size, path, content) => handleFileLoadedAsync(content || '', name, size, path)} 
-                     onError={(msg) => alert(msg)} 
-                   />
-                </div>
-              ) : (
-                <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-                   {/* Render ALL files but hide inactive ones to keep state/DOM alive */}
-                   {files.map(file => (
-                      <FileWorkspace 
+        <div className="flex-1 flex bg-white dark:bg-slate-950 overflow-hidden">
+          <div className="flex-1 flex flex-col min-w-0">
+            {activeView === 'compare' ? (
+               <ComparePage 
+                  originalContent={activeFile?.text || ''}
+                  originalFileName={activeFile?.name}
+                  onBack={() => {
+                     if (files.length > 0) setActiveView('editor');
+                     else setActiveView('home');
+                  }}
+                  theme={theme}
+               />
+            ) : activeView === 'history' ? (
+               <HistoryPage 
+                  onOpen={handleLoadFileFromPath} 
+                  onBack={() => {
+                    if (files.length > 0) setActiveView('editor');
+                    else setActiveView('home');
+                  }} 
+                  favorites={favorites}
+                  onToggleFavorite={handleToggleFavorite}
+                  activeFilePath={activeFile?.path}
+               />
+            ) : (
+              <>
+                {activeView === 'editor' && (
+                  <div 
+                    className="h-9 bg-slate-100 dark:bg-slate-900 border-b border-slate-300 dark:border-slate-800 flex items-center px-2 gap-1 overflow-x-auto draggable-region [&::-webkit-scrollbar]:hidden" 
+                    style={{ scrollbarWidth: 'none' }}
+                  >
+                    {files.map(file => (
+                      <div 
                         key={file.id}
-                        file={file}
-                        isActive={file.id === activeFileId}
-                        viewMode={viewMode}
-                        searchQuery={searchQuery}
-                        sortOrder={sortOrder}
-                        viewSettings={viewSettings}
-                        showLineNumbers={showLineNumbers}
-                        onUpdate={handleUpdateValue}
-                        onRawChange={handleRawChange}
-                      />
-                   ))}
-                   
-                   {/* Fallback if no files - though ActiveView logic usually handles this */}
-                   {files.length === 0 && (
-                      <Home 
-                        onFileLoaded={(_, name, size, path, content) => handleFileLoadedAsync(content || '', name, size, path)} 
-                        onError={(msg) => alert(msg)} 
-                      />
-                   )}
-                </div>
-              )}
-            </>
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, file.id)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, file.id)}
+                        onClick={() => handleTabSwitch(file.id)}
+                        className={`group flex items-center gap-2 px-3 py-1.5 min-w-[120px] max-w-[200px] text-xs cursor-pointer rounded-t-lg select-none transition-all no-drag h-full mt-1 border-r border-l ${
+                          file.id === activeFileId 
+                            ? 'bg-white dark:bg-slate-950 border-t-2 border-t-indigo-500 border-r-slate-300 dark:border-r-slate-800 border-l-slate-300 dark:border-l-slate-800 text-indigo-700 dark:text-indigo-400 font-bold relative top-[1px] z-10' 
+                            : 'bg-slate-200 dark:bg-slate-800/50 border-t border-t-transparent border-r-transparent border-l-transparent text-slate-500 dark:text-slate-500 hover:bg-slate-300 dark:hover:bg-slate-800'
+                        } ${draggedFileId === file.id ? 'opacity-50' : ''}`}
+                      >
+                        {getFileIcon(file.format, 12, file.id === activeFileId ? '' : 'text-slate-400')}
+                        <span className="truncate flex-1">{file.name}</span>
+                        {file.isDirty && <span className="w-2 h-2 rounded-full bg-indigo-500"></span>}
+                        <button onClick={(e) => closeFile(file.id, e as any)} className="opacity-0 group-hover:opacity-100 hover:bg-slate-300 dark:hover:bg-slate-600 rounded p-0.5 text-slate-500 dark:text-slate-400"><X size={10} /></button>
+                      </div>
+                    ))}
+                     <button onClick={() => setShowNewFileModal(true)} className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors no-drag shrink-0 mt-1 ml-0.5"><Plus size={14} /></button>
+                  </div>
+                )}
+
+                {activeView === 'home' ? (
+                  <Home 
+                    onFileLoaded={(_, name, size, path, content) => handleFileLoadedAsync(content || '', name, size, path)} 
+                    onError={(msg) => alert(msg)} 
+                  />
+                ) : (
+                  <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+                     {files.map(file => (
+                        <FileWorkspace 
+                          key={file.id}
+                          file={file}
+                          isActive={file.id === activeFileId}
+                          viewMode={viewMode}
+                          searchQuery={searchQuery}
+                          sortOrder={sortOrder}
+                          viewSettings={viewSettings}
+                          showLineNumbers={showLineNumbers}
+                          onUpdate={handleUpdateValue}
+                          onRawChange={handleRawChange}
+                        />
+                     ))}
+                     
+                     {files.length === 0 && (
+                        <Home 
+                          onFileLoaded={(_, name, size, path, content) => handleFileLoadedAsync(content || '', name, size, path)} 
+                          onError={(msg) => alert(msg)} 
+                        />
+                     )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          
+          {showAiAssistant && activeView === 'editor' && activeFile && (
+            <AiAssistant 
+              activeFile={activeFile} 
+              onClose={() => setShowAiAssistant(false)} 
+            />
+          )}
+          
+          {!showAiAssistant && activeView === 'editor' && activeFile && (
+            <button 
+              onClick={() => setShowAiAssistant(true)}
+              className="fixed bottom-8 right-8 h-14 min-w-[3.5rem] bg-gradient-to-br from-fuchsia-600 via-purple-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 text-white rounded-full shadow-2xl z-40 transition-all duration-500 hover:scale-110 active:scale-95 group flex items-center justify-center px-4 overflow-hidden ring-4 ring-white dark:ring-slate-900"
+              title="Tree Assistant (Ctrl+J)"
+            >
+              <Codesandbox size={24} className="shrink-0 transition-transform duration-700 ease-in-out group-hover:rotate-[360deg]" />
+              <span className="max-w-0 group-hover:max-w-xs transition-all duration-700 whitespace-nowrap text-[10px] font-black uppercase tracking-[0.25em] overflow-hidden group-hover:ml-3">
+                Tree Assistant
+              </span>
+            </button>
           )}
         </div>
       </div>
 
-      {/* Loading Overlay - Z-Index High to sit on top of everything */}
       {isLoading && (
          <div className="fixed inset-0 bg-black/50 z-[100] flex flex-col items-center justify-center backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-2xl flex flex-col items-center border border-slate-200 dark:border-slate-800">
