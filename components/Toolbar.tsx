@@ -32,9 +32,9 @@ import {
   Trash2,
   Scissors,
   Terminal,
-  FolderTree
 } from "lucide-react";
 import { EditorFile, FileFormat, SortOrder, ViewSettings } from "../types";
+import appLogo from '../assets/icon.png';
 import Tooltip from "./Tooltip";
 
 interface ToolbarProps {
@@ -196,9 +196,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
             </button>
           </Tooltip>
           <div className="flex items-center gap-3 select-none px-2 py-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-md text-white">
-               <FolderTree size={18} />
-            </div>
+            <img 
+              src={appLogo} 
+              alt="Tree File Logo" 
+              className="w-8 h-8 rounded-lg shadow-md object-cover" 
+            />
             <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500 dark:from-indigo-400 dark:to-purple-400 truncate hidden md:block">
               Tree File
             </h1>
