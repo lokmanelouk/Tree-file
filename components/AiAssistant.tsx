@@ -191,7 +191,7 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
       apiKey: apiKey, // Pass the key here!
       
       // 2. Use the STABLE, FREE model
-      model: 'gemini-2.5-flash', 
+      model: 'gemini-2.5-flash-lite', 
       
       contents: [
         {
