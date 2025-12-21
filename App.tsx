@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef, useCallback, useTransition } from 'react';
 import { 
   Plus, 
@@ -30,6 +29,19 @@ import { JsonValue, EditorFile, SortOrder, ViewSettings, Path, FileFormat, Histo
 
 type ViewState = 'home' | 'editor' | 'history' | 'compare';
 type EditorViewMode = 'tree' | 'table' | 'raw';
+
+// Robust worker URL construction for environments with inconsistent import.meta support
+const resolveWorkerUrl = (relativePath: string) => {
+  try {
+    // Standard ESM resolution
+    return new URL(relativePath, import.meta.url);
+  } catch (err) {
+    // Fallback to location-based resolution
+    const base = window.location.origin + window.location.pathname;
+    const baseUrl = base.endsWith('/') ? base : base.substring(0, base.lastIndexOf('/') + 1);
+    return new URL(relativePath, baseUrl);
+  }
+};
 
 // --- Internal Component: FileWorkspace ---
 interface FileWorkspaceProps {
@@ -66,7 +78,7 @@ const FileWorkspace = React.memo(({
   }, [file.json, sortOrder]);
 
   return (
-    <div className={isActive ? "flex-1 flex flex-col h-full overflow-hidden" : "hidden"}>
+    <div className={isActive ? "flex-1 flex flex-col h-full overflow-hidden animate-in fade-in duration-300" : "hidden"}>
       <div className="flex-1 overflow-auto bg-white dark:bg-slate-950 relative h-full">
         {viewMode === 'tree' ? (
             <TreeViewer 
@@ -121,6 +133,10 @@ function App() {
   // Stats State (Async calculation to prevent freezing)
   const [currentFileStats, setCurrentFileStats] = useState<JsonStats>({ totalNodes: 0, maxDepth: 0, objects: 0, arrays: 0, primitives: 0 });
 
+  // Cleanup Tracking State
+  const [activeCleanups, setActiveCleanups] = useState<string[]>([]);
+  const preCleanupTextRef = useRef<Record<string, string>>({});
+
   // --- View State ---
   const [activeView, setActiveView] = useState<ViewState>('home');
   const [viewMode, setViewMode] = useState<EditorViewMode>('tree');
@@ -161,14 +177,17 @@ function App() {
 
   const activeFile = useMemo(() => files.find(f => f.id === activeFileId), [files, activeFileId]);
 
-  // Handle CSV format to auto-switch to table mode
+  // Handle CSV format to auto-switch to table mode ONLY when the active file changes
   useEffect(() => {
-    if (activeFile?.format === 'csv') {
+    if (!activeFile) return;
+    if (activeFile.format === 'csv') {
       setViewMode('table');
-    } else if (activeFile && viewMode === 'table') {
+    } else if (viewMode === 'table') {
       setViewMode('tree');
     }
-  }, [activeFileId, activeFile?.format, viewMode]);
+    // Clear active cleanups visual when switching files
+    setActiveCleanups([]);
+  }, [activeFileId, activeFile?.format]);
 
   // --- HELPER: Async Action Wrapper ---
   const withLoading = useCallback((action: () => void, message: string = 'Processing...') => {
@@ -360,81 +379,108 @@ function App() {
     }
   };
 
-  const handleFileLoadedAsync = (rawContent: string, name: string, size: number, path?: string) => {
-    withLoading(() => {
-      try {
-        const format = detectFormat(name);
-        let text = rawContent || '';
-        let json: JsonValue = null;
-        let fileSize = size;
+  const handleFileLoadedAsync = async (rawContent: string, name: string, size: number, path?: string) => {
+    setLoadingMessage('Optimizing Buffer...');
+    setIsLoading(true);
 
-        if (path && text.trim() === path.trim()) {
-           throw new Error("Invalid file content read (content matches path).");
-        }
+    try {
+      const format = detectFormat(name);
+      let text = rawContent || '';
+      let json: JsonValue = null;
+      let fileSize = size;
 
-        if (fileSize === 0 && text) {
-          fileSize = new Blob([text]).size;
-        }
-
-        const isLargeFile = text.length > 5 * 1024 * 1024; // 5MB
-
-        if (isLargeFile) {
-          json = {}; 
-        } else {
-          if (text.trim().length > 0) {
-            json = parseContent(text, format);
-          }
-        }
-
-        const newFile: EditorFile = {
-          id: crypto.randomUUID(),
-          name,
-          path,
-          format,
-          json,
-          text,
-          isDirty: false,
-          meta: { name, size: fileSize, type: format, lastModified: Date.now(), itemCount: 0 },
-          history: {
-            snapshots: [text],
-            currentIndex: 0
-          },
-          formatStyle: 'pretty'
-        };
-
-        setFiles(prev => [...prev, newFile]);
-        setActiveFileId(newFile.id);
-        setActiveView('editor');
-
-        if (isLargeFile) {
-          setViewMode('raw');
-          setNotification(`File is large (${(fileSize / 1024 / 1024).toFixed(2)} MB). Opened in Raw Mode for performance.`);
-        } else if (!text || text.trim().length === 0) {
-          setViewMode('raw');
-        } else if (format === 'csv') {
-          setViewMode('table');
-        } else {
-          setViewMode('tree');
-        }
-
-        setViewSettings(prev => ({ ...prev, expandedLevel: 1 }));
-
-        if (window.electron && path) {
-          window.electron.addToHistory({ name, path, format });
-        } else {
-          const historyPath = path || name; 
-          const item: HistoryItem = { name, path: historyPath, format, lastOpened: new Date().toISOString() };
-          const history = JSON.parse(localStorage.getItem('history') || '[]');
-          const newHistory = [item, ...history.filter((h: any) => h.path !== item.path)].slice(0, 50);
-          localStorage.setItem('history', JSON.stringify(newHistory));
-        }
-
-      } catch (e: any) {
-        console.error("File Load Error:", e);
-        const msg = e.message.length > 100 ? e.message.substring(0, 100) + '...' : e.message;
-        alert(`Failed to load file: ${msg}`);
+      if (path && text.trim() === path.trim()) {
+         throw new Error("Invalid file content read (content matches path).");
       }
-    }, 'Parsing File...');
+
+      if (fileSize === 0 && text) {
+        fileSize = new Blob([text]).size;
+      }
+
+      const isVeryLarge = text.length > 10 * 1024 * 1024; // 10MB
+
+      if (isVeryLarge) {
+        setNotification(`File is very large (${(fileSize / 1024 / 1024).toFixed(2)} MB). Opening in Raw Mode first.`);
+        json = {}; 
+      } else {
+        setLoadingMessage('Neural Parsing (Off-Thread)...');
+        try {
+          json = await new Promise((resolve, reject) => {
+            let worker: Worker;
+            try {
+              const workerUrl = resolveWorkerUrl('./utils/parserWorker.ts');
+              worker = new Worker(workerUrl, { type: 'module' });
+            } catch (err) {
+              return reject(new Error("Worker construction failed. Fallback triggered."));
+            }
+
+            worker.onmessage = (ev) => {
+              if (ev.data.success) resolve(ev.data.json);
+              else reject(new Error(ev.data.error));
+              worker.terminate();
+            };
+            worker.onerror = (_err) => {
+              reject(new Error("Worker thread execution failed."));
+              worker.terminate();
+            };
+            worker.postMessage({ content: text, format });
+          });
+        } catch (workerErr: any) {
+          console.warn("Off-thread parsing failed, falling back to main thread:", workerErr.message);
+          setLoadingMessage('Neural Parsing (Fallback)...');
+          json = parseContent(text, format);
+        }
+      }
+
+      const newFile: EditorFile = {
+        id: crypto.randomUUID(),
+        name,
+        path,
+        format,
+        json,
+        text,
+        isDirty: false,
+        meta: { name, size: fileSize, type: format, lastModified: Date.now(), itemCount: 0 },
+        history: {
+          snapshots: [text],
+          currentIndex: 0
+        },
+        formatStyle: 'pretty'
+      };
+
+      setFiles(prev => [...prev, newFile]);
+      setActiveFileId(newFile.id);
+      setActiveView('editor');
+
+      if (isVeryLarge) {
+        setViewMode('raw');
+      } else if (!text || text.trim().length === 0) {
+        setViewMode('raw');
+      } else if (format === 'csv') {
+        setViewMode('table');
+      } else {
+        setViewMode('tree');
+      }
+
+      setViewSettings(prev => ({ ...prev, expandedLevel: 1 }));
+
+      if (window.electron && path) {
+        window.electron.addToHistory({ name, path, format });
+      } else {
+        const historyPath = path || name; 
+        const item: HistoryItem = { name, path: historyPath, format, lastOpened: new Date().toISOString() };
+        const history = JSON.parse(localStorage.getItem('history') || '[]');
+        const newHistory = [item, ...history.filter((h: any) => h.path !== item.path)].slice(0, 50);
+        localStorage.setItem('history', JSON.stringify(newHistory));
+      }
+
+    } catch (e: any) {
+      console.error("File Load Error:", e);
+      const msg = e.message.length > 100 ? e.message.substring(0, 100) + '...' : e.message;
+      alert(`Failed to load file: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLoadFileFromPath = async (path: string, name: string) => {
@@ -642,8 +688,21 @@ function App() {
     }, 'Minifying...');
   };
 
-  const applyJsonTool = (transform: (data: JsonValue) => JsonValue, label: string) => {
+  const applyJsonTool = (transform: (data: JsonValue) => JsonValue, label: string, toolId: string) => {
     if (!activeFile) return;
+
+    // Toggle behavior logic
+    if (activeCleanups.includes(toolId)) {
+       const originalText = preCleanupTextRef.current[activeFile.id];
+       if (originalText !== undefined) {
+          withLoading(() => {
+            handleRawChange(originalText);
+            setActiveCleanups(prev => prev.filter(t => t !== toolId));
+          }, "Reverting...");
+          return;
+       }
+    }
+
     withLoading(() => {
         try {
           if (activeFile.text.length > 5 * 1024 * 1024 && Object.keys(activeFile.json as object).length === 0) {
@@ -651,6 +710,11 @@ function App() {
               return;
           }
           
+          // Store checkpoint if this is the first cleanup applied to this file in this session
+          if (!activeCleanups.length) {
+             preCleanupTextRef.current[activeFile.id] = activeFile.text;
+          }
+
           const newData = transform(activeFile.json);
           const newText = stringifyContent(newData, activeFile.format);
           const newSize = new Blob([newText]).size;
@@ -665,6 +729,9 @@ function App() {
             };
             return addToHistory(updatedFile, newText);
           });
+
+          setActiveCleanups(prev => [...new Set([...prev, toolId])]);
+
         } catch (e: any) {
           alert(`Tool error: ${e.message}`);
         }
@@ -673,15 +740,26 @@ function App() {
 
   const recursiveRemoveNulls = (data: JsonValue): JsonValue => {
     if (Array.isArray(data)) {
-      return data.map(recursiveRemoveNulls).filter(val => val !== null);
+      // Create a new array, removing nulls/undefined and recursing
+      const nextArr: any[] = [];
+      for (const val of data) {
+         const processed = recursiveRemoveNulls(val);
+         if (processed !== null && processed !== undefined) {
+           nextArr.push(processed);
+         }
+      }
+      return nextArr;
     }
     if (data !== null && typeof data === 'object') {
-      return Object.entries(data).reduce((acc, [key, val]) => {
-        if (val !== null) {
-          acc[key] = recursiveRemoveNulls(val);
+      const nextObj: JsonObject = {};
+      for (const [key, val] of Object.entries(data)) {
+        const processed = recursiveRemoveNulls(val);
+        // Exclude the key if the result is null/undefined
+        if (processed !== null && processed !== undefined) {
+          nextObj[key] = processed;
         }
-        return acc;
-      }, {} as JsonObject);
+      }
+      return nextObj;
     }
     return data;
   };
@@ -690,18 +768,19 @@ function App() {
     if (typeof data === 'string') return data.trim();
     if (Array.isArray(data)) return data.map(recursiveTrimStrings);
     if (data !== null && typeof data === 'object') {
-      return Object.entries(data).reduce((acc, [key, val]) => {
-        acc[key] = recursiveTrimStrings(val);
-        return acc;
-      }, {} as JsonObject);
+      const nextObj: JsonObject = {};
+      for (const [key, val] of Object.entries(data)) {
+        nextObj[key] = recursiveTrimStrings(val);
+      }
+      return nextObj;
     }
     return data;
   };
 
-  const handleToolSortKeys = () => applyJsonTool((d) => sortJson(d, 'asc'), 'Sorting Keys...');
-  const handleToolSortKeysDesc = () => applyJsonTool((d) => sortJson(d, 'desc'), 'Sorting Keys...');
-  const handleToolRemoveNulls = () => applyJsonTool(recursiveRemoveNulls, 'Removing Nulls...');
-  const handleToolTrimStrings = () => applyJsonTool(recursiveTrimStrings, 'Trimming Strings...');
+  const handleToolSortKeys = () => applyJsonTool((d) => sortJson(d, 'asc'), 'Sorting Keys (A-Z)...', 'sort_asc');
+  const handleToolSortKeysDesc = () => applyJsonTool((d) => sortJson(d, 'desc'), 'Sorting Keys (Z-A)...', 'sort_desc');
+  const handleToolRemoveNulls = () => applyJsonTool(recursiveRemoveNulls, 'Removing Nulls...', 'remove_nulls');
+  const handleToolTrimStrings = () => applyJsonTool(recursiveTrimStrings, 'Trimming Strings...', 'trim_strings');
 
   const initiateConvert = (target: FileFormat) => {
     setPendingFormat(target);
@@ -1085,142 +1164,58 @@ function App() {
       )}
 
       {showNewFileModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-      
-      {/* Header */}
-      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-        <h3 className="font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider text-sm">
-          Create New File
-        </h3>
-        <button
-          onClick={() => setShowNewFileModal(false)}
-          className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-150"
-        >
-          <X size={18} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" />
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="p-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
-
-        {/* JSON */}
-        <button
-          onClick={() => createNewFile('json')}
-          className="
-            flex flex-col items-center gap-3 p-4 rounded-xl
-            bg-slate-50 dark:bg-slate-800
-            hover:bg-white dark:hover:bg-slate-700
-            border border-slate-200 dark:border-slate-700
-            hover:border-yellow-500 dark:hover:border-yellow-500
-            hover:shadow-lg
-            transition-[background-color,border-color,box-shadow,transform]
-            duration-150 ease-out
-            active:scale-95
-            group
-          "
-        >
-          <div className="
-            w-10 h-10 rounded-lg
-            bg-yellow-50 dark:bg-yellow-900/20
-            flex items-center justify-center
-            transition-transform duration-150 ease-out
-            group-hover:scale-110
-          ">
-            <FileJson size={24} className="text-yellow-500 dark:text-yellow-400" />
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300">
+             <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h3 className="font-black text-slate-800 dark:text-slate-100 uppercase tracking-[0.2em] text-xs">Create New File</h3>
+                <button 
+                  onClick={() => setShowNewFileModal(false)}
+                  className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X size={20} />
+                </button>
+             </div>
+             <div className="p-8 grid grid-cols-2 gap-4">
+                <button 
+                  onClick={() => createNewFile('json')} 
+                  className="flex flex-col items-center gap-4 p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-yellow-500/50 dark:hover:border-yellow-500/50 hover:shadow-xl hover:shadow-yellow-500/10 transition-all active:scale-[0.98] group"
+                >
+                   <div className="w-16 h-16 rounded-2xl bg-yellow-50 dark:bg-yellow-900/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                      <FileJson size={32} className="text-yellow-500" />
+                   </div>
+                   <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest">JSON</span>
+                </button>
+                <button 
+                  onClick={() => createNewFile('yaml')} 
+                  className="flex flex-col items-center gap-4 p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500/50 dark:hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-500/10 transition-all active:scale-[0.98] group"
+                >
+                   <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                      <Database size={32} className="text-indigo-500" />
+                   </div>
+                   <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest">YAML</span>
+                </button>
+                <button 
+                  onClick={() => createNewFile('xml')} 
+                  className="flex flex-col items-center gap-4 p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-orange-500/50 dark:hover:border-orange-500/50 hover:shadow-xl hover:shadow-orange-500/10 transition-all active:scale-[0.98] group"
+                >
+                   <div className="w-16 h-16 rounded-2xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                      <FileCode size={32} className="text-orange-500" />
+                   </div>
+                   <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest">XML</span>
+                </button>
+                <button 
+                  onClick={() => createNewFile('csv')} 
+                  className="flex flex-col items-center gap-4 p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-green-500/50 dark:hover:border-green-500/50 hover:shadow-xl hover:shadow-green-500/10 transition-all active:scale-[0.98] group"
+                >
+                   <div className="w-16 h-16 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                      <FileSpreadsheet size={32} className="text-green-500" />
+                   </div>
+                   <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest">CSV</span>
+                </button>
+             </div>
           </div>
-          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">JSON</span>
-        </button>
-
-        {/* YAML */}
-        <button
-          onClick={() => createNewFile('yaml')}
-          className="
-            flex flex-col items-center gap-3 p-4 rounded-xl
-            bg-slate-50 dark:bg-slate-800
-            hover:bg-white dark:hover:bg-slate-700
-            border border-slate-200 dark:border-slate-700
-            hover:border-indigo-500 dark:hover:border-indigo-500
-            hover:shadow-lg
-            transition-[background-color,border-color,box-shadow,transform]
-            duration-150 ease-out
-            active:scale-95
-            group
-          "
-        >
-          <div className="
-            w-10 h-10 rounded-lg
-            bg-indigo-50 dark:bg-indigo-900/20
-            flex items-center justify-center
-            transition-transform duration-150 ease-out
-            group-hover:scale-110
-          ">
-            <Database size={24} className="text-indigo-500 dark:text-indigo-400" />
-          </div>
-          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">YAML</span>
-        </button>
-
-        {/* XML */}
-        <button
-          onClick={() => createNewFile('xml')}
-          className="
-            flex flex-col items-center gap-3 p-4 rounded-xl
-            bg-slate-50 dark:bg-slate-800
-            hover:bg-white dark:hover:bg-slate-700
-            border border-slate-200 dark:border-slate-700
-            hover:border-orange-500 dark:hover:border-orange-500
-            hover:shadow-lg
-            transition-[background-color,border-color,box-shadow,transform]
-            duration-150 ease-out
-            active:scale-95
-            group
-          "
-        >
-          <div className="
-            w-10 h-10 rounded-lg
-            bg-orange-50 dark:bg-orange-900/20
-            flex items-center justify-center
-            transition-transform duration-150 ease-out
-            group-hover:scale-110
-          ">
-            <FileCode size={24} className="text-orange-500 dark:text-orange-400" />
-          </div>
-          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">XML</span>
-        </button>
-
-        {/* CSV */}
-        <button
-          onClick={() => createNewFile('csv')}
-          className="
-            flex flex-col items-center gap-3 p-4 rounded-xl
-            bg-slate-50 dark:bg-slate-800
-            hover:bg-white dark:hover:bg-slate-700
-            border border-slate-200 dark:border-slate-700
-            hover:border-green-500 dark:hover:border-green-500
-            hover:shadow-lg
-            transition-[background-color,border-color,box-shadow,transform]
-            duration-150 ease-out
-            active:scale-95
-            group
-          "
-        >
-          <div className="
-            w-10 h-10 rounded-lg
-            bg-green-50 dark:bg-green-900/20
-            flex items-center justify-center
-            transition-transform duration-150 ease-out
-            group-hover:scale-110
-          ">
-            <FileSpreadsheet size={24} className="text-green-500 dark:text-green-400" />
-          </div>
-          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">CSV</span>
-        </button>
-
-      </div>
-    </div>
-  </div>
-)}
-
+        </div>
+      )}
 
       <input type="file" ref={fileInputRef} onChange={handleFileInputChange} className="hidden" accept=".json,.yaml,.yml,.xml,.csv,application/json,text/yaml,text/xml,text/csv" />
 
@@ -1260,6 +1255,7 @@ function App() {
         onToolRemoveNulls={handleToolRemoveNulls}
         onToolTrimStrings={handleToolTrimStrings}
         onOpenTypeGenerator={() => setShowTypeGenerator(true)}
+        activeCleanups={activeCleanups}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -1284,7 +1280,7 @@ function App() {
           />
         )}
 
-        <div className="flex-1 flex bg-white dark:bg-slate-950 overflow-hidden">
+        <div className="flex-1 flex min-w-0 bg-white dark:bg-slate-950 overflow-hidden">
           <div className="flex-1 flex flex-col min-w-0">
             {activeView === 'compare' ? (
                <ComparePage 
@@ -1331,10 +1327,10 @@ function App() {
                         {getFileIcon(file.format, 12, file.id === activeFileId ? '' : 'text-slate-400')}
                         <span className="truncate flex-1">{file.name}</span>
                         {file.isDirty && <span className="w-2 h-2 rounded-full bg-indigo-500"></span>}
-                        <button onClick={(e) => closeFile(file.id, e as any)} className="opacity-0 group-hover:opacity-100 hover:bg-slate-300 dark:hover:bg-slate-600 rounded p-0.5 text-slate-500 dark:text-slate-400"><X size={10} /></button>
+                        <button onClick={(e) => closeFile(file.id, e as any)} className="opacity-0 group-hover:opacity-100 hover:bg-slate-300 dark:hover:bg-slate-600 rounded p-0.5 text-slate-500 dark:text-slate-400 transition-opacity"><X size={10} /></button>
                       </div>
                     ))}
-                     <button onClick={() => setShowNewFileModal(true)} className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors no-drag shrink-0 mt-1 ml-0.5"><Plus size={14} /></button>
+                     <button onClick={() => setShowNewFileModal(true)} className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors no-drag shrink-0 mt-1 ml-0.5"><Plus size={14} /></button>
                   </div>
                 )}
 
@@ -1382,11 +1378,11 @@ function App() {
           {!showAiAssistant && activeView === 'editor' && activeFile && (
             <button 
               onClick={() => setShowAiAssistant(true)}
-              className="fixed bottom-8 right-8 h-14 min-w-[3.5rem] bg-gradient-to-br from-fuchsia-600 via-purple-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 text-white rounded-full shadow-2xl z-40 transition-all duration-500 hover:scale-110 active:scale-95 group flex items-center justify-center px-4 overflow-hidden ring-4 ring-white dark:ring-slate-900"
+              className="fixed bottom-6 right-6 h-14 min-w-[3.5rem] bg-gradient-to-br from-fuchsia-600 via-purple-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 text-white rounded-full shadow-2xl z-40 transition-all duration-500 hover:scale-110 active:scale-95 group flex items-center justify-center px-4 overflow-hidden ring-4 ring-white dark:ring-slate-900"
               title="Tree Assistant (Ctrl+J)"
             >
-              <Codesandbox size={24} className="shrink-0 transition-transform duration-700 ease-in-out group-hover:rotate-[360deg]" />
-              <span className="max-w-0 group-hover:max-w-xs transition-all duration-700 whitespace-nowrap text-[10px] font-black uppercase tracking-[0.25em] overflow-hidden group-hover:ml-3">
+              <Codesandbox size={28} className="shrink-0 transition-transform duration-700 ease-in-out group-hover:rotate-[360deg]" />
+              <span className="max-w-0 group-hover:max-w-xs transition-all duration-700 whitespace-nowrap text-xs font-black uppercase tracking-[0.2em] overflow-hidden group-hover:ml-3">
                 Tree Assistant
               </span>
             </button>

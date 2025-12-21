@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import {
   PanelLeftClose,
@@ -82,6 +81,7 @@ interface ToolbarProps {
   onToolSortKeysDesc: () => void;
   onToolRemoveNulls: () => void;
   onToolTrimStrings: () => void;
+  activeCleanups?: string[];
 
   // Code Gen
   onOpenTypeGenerator: () => void;
@@ -119,6 +119,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onToolSortKeysDesc,
   onToolRemoveNulls,
   onToolTrimStrings,
+  activeCleanups = [],
   onOpenTypeGenerator,
 }) => {
   const [showConvertMenu, setShowConvertMenu] = useState(false);
@@ -170,7 +171,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
   const isEditorView = activeView === "editor" || activeView === "home";
   
-  // Format check: YAML and CSV do not support standard "Pretty/Minify" toggling
   const isFormatSupported = activeFile && !['yaml', 'csv'].includes(activeFile.format);
   
   const isPrettyActive = activeFile?.formatStyle === 'pretty';
@@ -180,7 +180,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   const isVisualActive = viewMode === 'tree' || viewMode === 'table';
 
   return (
-    <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 relative z-30">
+    <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 relative z-[2000] isolation-auto" style={{ isolation: 'isolate' }}>
       <div className="h-14 flex items-center px-4 justify-between gap-4 select-none draggable-region">
         <div className="flex items-center gap-4 shrink-0">
           <Tooltip content={showSidebar ? "Close Sidebar" : "Open Sidebar"} side="bottom">
@@ -296,7 +296,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <Tooltip content="Clean & Sort Data" side="bottom">
                   <button
                     onClick={() => setShowToolsMenu(!showToolsMenu)}
-                    className="p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 bg-pink-50 text-pink-700 hover:bg-pink-100 hover:text-pink-800 dark:bg-pink-900/20 dark:text-pink-400 dark:hover:bg-pink-900/40 dark:hover:text-pink-300 border border-pink-200 dark:border-pink-900/50"
+                    className={`p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 border z-[2100] ${
+                       activeCleanups.length 
+                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-500/20' 
+                        : 'bg-pink-50 text-pink-700 hover:bg-pink-100 hover:text-pink-800 dark:bg-pink-900/20 dark:text-pink-400 dark:hover:bg-pink-900/40 dark:hover:text-pink-300 border-pink-200 dark:border-pink-900/50'
+                    }`}
                   >
                     <Wrench size={14} />
                     <span className="hidden xl:inline text-xs font-medium">
@@ -308,52 +312,76 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 {showToolsMenu && (
                   <>
                     <div
-                      className="fixed inset-0 z-40"
+                      className="fixed inset-0 z-[2050]"
                       onClick={() => setShowToolsMenu(false)}
                     ></div>
-                    <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 py-1">
-                      <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <div className="absolute top-full right-0 mt-2 w-52 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-[2200] overflow-hidden animate-in fade-in zoom-in-95 duration-150 py-1 ring-1 ring-black/5">
+                      <div className="px-4 py-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800 mb-1">
                         Cleanup Actions
                       </div>
+                      
                       <button
                         onClick={() => {
                           onToolSortKeys();
                           setShowToolsMenu(false);
                         }}
-                        className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3"
+                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${
+                          activeCleanups.includes('sort_asc') 
+                            ? 'bg-indigo-500 text-white' 
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'
+                        }`}
                       >
-                        <ArrowDownAZ size={14} className="text-blue-500" /> Sort
-                        Keys (A-Z)
+                        <ArrowDownAZ size={14} className={activeCleanups.includes('sort_asc') ? 'text-white' : 'text-indigo-500'} /> 
+                        Sort Keys (A-Z)
+                        {activeCleanups.includes('sort_asc') && <Check size={12} className="ml-auto" />}
                       </button>
+
                       <button
                         onClick={() => {
                           onToolSortKeysDesc();
                           setShowToolsMenu(false);
                         }}
-                        className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3"
+                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${
+                          activeCleanups.includes('sort_desc') 
+                            ? 'bg-indigo-500 text-white' 
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'
+                        }`}
                       >
-                        <ArrowUpAZ size={14} className="text-blue-500" /> Sort
-                        Keys (Z-A)
+                        <ArrowUpAZ size={14} className={activeCleanups.includes('sort_desc') ? 'text-white' : 'text-indigo-500'} /> 
+                        Sort Keys (Z-A)
+                        {activeCleanups.includes('sort_desc') && <Check size={12} className="ml-auto" />}
                       </button>
+
                       <button
                         onClick={() => {
                           onToolRemoveNulls();
                           setShowToolsMenu(false);
                         }}
-                        className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3"
+                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${
+                          activeCleanups.includes('remove_nulls') 
+                            ? 'bg-indigo-500 text-white' 
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-900/30'
+                        }`}
                       >
-                        <Trash2 size={14} className="text-red-500" /> Remove
-                        Nulls
+                        <Trash2 size={14} className={activeCleanups.includes('remove_nulls') ? 'text-white' : 'text-rose-500'} /> 
+                        Remove Nulls
+                        {activeCleanups.includes('remove_nulls') && <Check size={12} className="ml-auto" />}
                       </button>
+
                       <button
                         onClick={() => {
                           onToolTrimStrings();
                           setShowToolsMenu(false);
                         }}
-                        className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3"
+                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${
+                          activeCleanups.includes('trim_strings') 
+                            ? 'bg-indigo-500 text-white' 
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-900/30'
+                        }`}
                       >
-                        <Scissors size={14} className="text-orange-500" /> Trim
-                        Strings
+                        <Scissors size={14} className={activeCleanups.includes('trim_strings') ? 'text-white' : 'text-amber-500'} /> 
+                        Trim Strings
+                        {activeCleanups.includes('trim_strings') && <Check size={12} className="ml-auto" />}
                       </button>
                     </div>
                   </>
@@ -376,10 +404,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 {showConvertMenu && (
                   <>
                     <div
-                      className="fixed inset-0 z-40"
+                      className="fixed inset-0 z-[2050]"
                       onClick={() => setShowConvertMenu(false)}
                     ></div>
-                    <div className="absolute top-full right-0 mt-2 w-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                    <div className="absolute top-full right-0 mt-2 w-44 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-[2200] overflow-hidden animate-in fade-in zoom-in-95 duration-150 ring-1 ring-black/5">
                       {(["json", "yaml", "xml", "csv"] as FileFormat[])
                         .filter((f) => f !== activeFile.format)
                         .map((fmt) => (
@@ -389,7 +417,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                               onConvert(fmt);
                               setShowConvertMenu(false);
                             }}
-                            className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 uppercase"
+                            className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-3 uppercase transition-colors"
                           >
                             {getFileIcon(fmt, 14)} To {fmt}
                           </button>
@@ -403,7 +431,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <Tooltip content="Export as JSON file" side="bottom">
                   <button
                     onClick={onExportJson}
-                    className="p-1.5 px-3 rounded-lg transition-colors flex items-center gap-2 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 hover:text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 dark:hover:bg-yellow-900/40 dark:hover:text-yellow-300 border border-yellow-200 dark:border-yellow-900/50"
+                    className="p-1.5 px-3 rounded-lg transition-colors flex items-center gap-2 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 hover:text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 dark:hover:bg-yellow-900/40 dark:hover:text-indigo-300 border border-yellow-200 dark:border-yellow-900/50"
                   >
                     <Download size={14} />
                     <span className="hidden xl:inline text-xs font-medium">

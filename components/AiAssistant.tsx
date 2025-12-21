@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { 
   Send, 
   Loader2, 
@@ -64,6 +63,64 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [copyingId, setCopyingId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const workerRef = useRef<Worker | null>(null);
+
+  // Initialize Worker
+  useEffect(() => {
+    try {
+      // Robust URL creation with manual fallback to handle 'Invalid URL' errors
+      let workerUrl;
+      try {
+        const base = (typeof import.meta !== 'undefined' && import.meta.url) 
+          ? import.meta.url 
+          : window.location.origin + window.location.pathname;
+        workerUrl = new URL('../utils/aiWorker.ts', base);
+      } catch (e) {
+        // Fallback to absolute relative path if origin construction is needed
+        workerUrl = new URL('./utils/aiWorker.ts', window.location.origin + '/');
+      }
+      
+      workerRef.current = new Worker(workerUrl, { type: 'module' });
+
+      workerRef.current.onmessage = (e) => {
+        const { type, text, message } = e.data;
+
+        if (type === 'chunk') {
+          setIsThinking(false);
+          setIsTyping(true);
+          setMessages(prev => {
+            const last = prev[prev.length - 1];
+            if (last && last.role === 'model' && !last.isError) {
+              const next = [...prev];
+              next[next.length - 1] = { ...last, text: (last.text || '') + text };
+              return next;
+            } else {
+              return [...prev, { role: 'model', text, timestamp: Date.now() }];
+            }
+          });
+        } else if (type === 'complete') {
+          setIsTyping(false);
+          setIsThinking(false);
+        } else if (type === 'error') {
+          setIsThinking(false);
+          setIsTyping(false);
+          const cleanMsg = cleanErrorMessage(message);
+          setMessages(prev => [...prev, {
+            role: 'model',
+            isError: true,
+            text: cleanMsg,
+            timestamp: Date.now()
+          }]);
+        }
+      };
+    } catch (err) {
+      console.error("AI Worker creation failed:", err);
+    }
+
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current && !isClearing) {
@@ -107,9 +164,11 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
     }, 400);
   };
 
+  // ... (keep your existing useEffect / imports) ...
+
   const handleSend = async (customPrompt?: string) => {
     const textToSend = (customPrompt || input).trim();
-    if (!textToSend || isTyping || isThinking || !activeFile) return;
+    if (!textToSend || isTyping || isThinking || !activeFile || !workerRef.current) return;
 
     const userMessage: ChatMessage = {
       role: 'user',
@@ -121,80 +180,41 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
     setInput('');
     setIsThinking(true);
 
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const dataSample = activeFile.text.length > 60000 
-        ? activeFile.text.substring(0, 60000) + "\n... [DATA_BUFFER_MAXED]"
-        : activeFile.text;
+    const dataSample = activeFile.text.length > 60000 
+      ? activeFile.text.substring(0, 60000) + "\n... [DATA_BUFFER_MAXED]"
+      : activeFile.text;
 
-      const responseStream = await ai.models.generateContentStream({
-        model: 'gemini-3-pro-preview',
-        contents: [
-          {
-            role: 'user',
-            parts: [{
-              text: `[SYSTEM_DIRECTIVE]: Tree Assistant | Senior Data Architect.
-              [FILE]: ${activeFile.name} | [FORMAT]: ${activeFile.format.toUpperCase()}
-              [RAW_DATA_BUFFER]:
-              ${dataSample}
-              
-              [TASK]: High-reasoning technical analysis. Be dense, professional, and Markdown-focused.
-              [REQUEST]: ${textToSend}`
-            }]
-          }
-        ],
-        config: {
-          thinkingConfig: { thinkingBudget: 32768 },
-        }
-      });
+    // 1. Get the API Key correctly from Vite
+    const apiKey = import.meta.env.VITE_API_KEY;
 
-      let fullText = '';
-      let isFirstChunk = true;
-
-      for await (const chunk of responseStream) {
-        if (isFirstChunk) {
-          setIsThinking(false);
-          setIsTyping(true);
-          setMessages(prev => [...prev, {
-            role: 'model',
-            text: '',
-            timestamp: Date.now()
-          }]);
-          isFirstChunk = false;
-        }
-        
-        const textChunk = chunk.text;
-        if (textChunk) {
-          fullText += textChunk;
-          setMessages(prev => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last && last.role === 'model') last.text = fullText;
-            return next;
-          });
-        }
-      }
-    } catch (error: any) {
-      console.error("Neural Logic Error:", error);
-      setIsThinking(false);
-      const cleanMsg = cleanErrorMessage(error.message || JSON.stringify(error));
+    workerRef.current.postMessage({
+      apiKey: apiKey, // Pass the key here!
       
-      setMessages(prev => [...prev, {
-        role: 'model',
-        isError: true,
-        text: cleanMsg,
-        timestamp: Date.now()
-      }]);
-    } finally {
-      setIsTyping(false);
-      setIsThinking(false);
-    }
+      // 2. Use the STABLE, FREE model
+      model: 'gemini-2.5-flash', 
+      
+      contents: [
+        {
+          role: 'user',
+          parts: [{
+            text: `[SYSTEM_DIRECTIVE]: Tree Assistant | Senior Data Architect.
+            [FILE]: ${activeFile.name} | [FORMAT]: ${activeFile.format.toUpperCase()}
+            [RAW_DATA_BUFFER]:
+            ${dataSample}
+            
+            [TASK]: High-reasoning technical analysis. Be dense, professional, and Markdown-focused.
+            [REQUEST]: ${textToSend}`
+          }]
+        }
+      ],
+      // 3. REMOVED thinkingConfig (It causes errors on Flash models)
+      config: {} 
+    });
   };
 
   return (
     <div className="w-full max-w-full sm:w-[420px] md:w-[460px] flex flex-col bg-slate-50 dark:bg-slate-950 border-l border-slate-200 dark:border-slate-800 shadow-2xl animate-in slide-in-from-right duration-300 overflow-hidden h-full z-50 relative">
       
-      {/* Custom Context Purge Modal */}
       {showClearConfirm && (
         <div className="absolute inset-0 z-[60] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl w-full max-w-[320px] flex flex-col items-center text-center animate-in zoom-in-95 duration-300">
@@ -223,13 +243,12 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
         </div>
       )}
 
-      {/* Premium Neural Header */}
       <header className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 backdrop-blur-xl shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative group">
             <div className="absolute -inset-0 bg-gradient-to-tr from-emerald-500 to-teal-500 rounded-lg blur opacity-20 group-hover:opacity-40 transition"></div>
             <div className="relative w-10 h-10 rounded-lg bg-white dark:bg-slate-800 flex items-center justify-center border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-inner">
-              <Codesandbox size={20} className="text-emerald-400 transition-transform duration-1000 ease-in-out group-hover:rotate-[360deg]" />
+              <Codesandbox size={20} className="text-emerald-600 dark:text-emerald-400 transition-transform duration-1000 ease-in-out group-hover:rotate-[360deg]" />
             </div>
           </div>
           <div>
@@ -262,12 +281,10 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
         </div>
       </header>
 
-      {/* Workspace Content */}
       <div 
         ref={scrollRef} 
         className={`flex-1 overflow-y-auto px-4 py-4 space-y-4 custom-scrollbar-refined bg-slate-50 dark:bg-slate-950 transition-all duration-400 ${isClearing ? 'opacity-0 translate-y-8 blur-md' : 'opacity-100 translate-y-0'}`}
       >
-        {/* Intelligence Modules */}
         <section className="space-y-2">
            <div className="flex items-center gap-2 mb-3">
               <span className="text-[8px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.3em] whitespace-nowrap">Reasoning Modules</span>
@@ -309,7 +326,6 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
           </div>
         </section>
 
-        {/* Conversation Stream */}
         <div className="space-y-5 pb-4">
           {messages.length === 0 && !isThinking && (
             <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in duration-500">
@@ -330,7 +346,7 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
                     {msg.role === 'user' ? <Fingerprint size={10} className="text-white" /> : <Codesandbox size={10} className="text-white" />}
                  </div>
                  <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${msg.isError ? 'text-rose-600 dark:text-rose-500' : 'text-slate-600 dark:text-slate-500'}`}>
-                    {msg.role === 'user' ? 'Operator' : msg.isError ? 'System Alert' : 'AI'}
+                    {msg.role === 'user' ? 'Operator' : msg.isError ? 'System Alert' : 'TREE ASSISTANT'}
                  </span>
               </div>
 
@@ -385,7 +401,7 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
                     <div className="h-1 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                       <div className="h-full bg-emerald-500 w-1/3 animate-[loading_1.5s_infinite_ease-in-out]"></div>
                     </div>
-                    <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">Syncing logic core (32k Budget)...</p>
+                    <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">Syncing logic core (Off-Thread)...</p>
                   </div>
                 </div>
               </div>
@@ -394,7 +410,6 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
         </div>
       </div>
 
-      {/* Input Action Bar */}
       <footer className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0">
         <div className="flex items-end gap-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-1.5 transition-all focus-within:ring-2 focus-within:ring-emerald-500/30 focus-within:border-emerald-500 focus-within:bg-white dark:focus-within:bg-slate-900">
           <textarea
