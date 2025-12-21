@@ -20,6 +20,10 @@ import {
 } from 'lucide-react';
 import { ChatMessage, EditorFile } from '../types';
 
+// 👇 FIX 1: Import the worker with "?worker" suffix.
+// This tells Vite to bundle it correctly for the .exe file.
+import AiWorker from '../utils/aiWorker?worker';
+
 interface AiAssistantProps {
   activeFile: EditorFile | undefined;
   onClose: () => void;
@@ -65,22 +69,12 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const workerRef = useRef<Worker | null>(null);
 
-  // Initialize Worker
+  // 👇 FIX 2: Initialize Worker (Simplified)
   useEffect(() => {
     try {
-      // Robust URL creation with manual fallback to handle 'Invalid URL' errors
-      let workerUrl;
-      try {
-        const base = (typeof import.meta !== 'undefined' && import.meta.url) 
-          ? import.meta.url 
-          : window.location.origin + window.location.pathname;
-        workerUrl = new URL('../utils/aiWorker.ts', base);
-      } catch (e) {
-        // Fallback to absolute relative path if origin construction is needed
-        workerUrl = new URL('./utils/aiWorker.ts', window.location.origin + '/');
-      }
-      
-      workerRef.current = new Worker(workerUrl, { type: 'module' });
+      // Instead of new URL(...), we just use new AiWorker()
+      // Vite handles the file paths automatically in production.
+      workerRef.current = new AiWorker();
 
       workerRef.current.onmessage = (e) => {
         const { type, text, message } = e.data;
@@ -164,8 +158,6 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
     }, 400);
   };
 
-  // ... (keep your existing useEffect / imports) ...
-
   const handleSend = async (customPrompt?: string) => {
     const textToSend = (customPrompt || input).trim();
     if (!textToSend || isTyping || isThinking || !activeFile || !workerRef.current) return;
@@ -184,13 +176,13 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
       ? activeFile.text.substring(0, 60000) + "\n... [DATA_BUFFER_MAXED]"
       : activeFile.text;
 
-    // 1. Get the API Key correctly from Vite
+    // Get the API Key correctly from Vite
     const apiKey = import.meta.env.VITE_API_KEY;
 
     workerRef.current.postMessage({
-      apiKey: apiKey, // Pass the key here!
+      apiKey: apiKey,
       
-      // 2. Use the STABLE, FREE model
+      // Use the model you confirmed works for you
       model: 'gemini-2.5-flash-lite', 
       
       contents: [
@@ -207,7 +199,6 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ activeFile, onClose }) => {
           }]
         }
       ],
-      // 3. REMOVED thinkingConfig (It causes errors on Flash models)
       config: {} 
     });
   };
