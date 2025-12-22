@@ -3,7 +3,7 @@ name: Build/Release
 on:
   push:
     tags:
-      - 'v*' # Trigger only when you tag a release (e.g., v1.0.2)
+      - 'v*'
 
 jobs:
   release:
@@ -15,17 +15,17 @@ jobs:
 
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # <-- Updated to v4
 
       - name: Install Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4  # <-- Updated to v4
         with:
-          node-version: 18
+          node-version: 20  # Updated to Node 20 (current standard)
 
       - name: Install Dependencies
         run: npm install
 
-      # This injects your secret key into the build process
+      # Inject API Key
       - name: Create .env file
         run: echo "VITE_API_KEY=${{ secrets.VITE_API_KEY }}" > .env
         shell: bash
@@ -35,8 +35,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Artifacts (Save the files)
-        uses: actions/upload-artifact@v3
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4  # <-- CRITICAL FIX: Updated to v4
         with:
-          name: release-artifacts
-          path: release/*
+          name: release-artifacts-${{ matrix.os }}
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.zip
