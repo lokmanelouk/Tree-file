@@ -15,18 +15,19 @@ interface CodeEditorProps {
 
 const LINE_HEIGHT = 24; // Fixed line height in pixels (matches Tailwind leading-6)
 
-const CodeEditor: React.FC<CodeEditorProps> = ({ 
-  value, 
-  onChange, 
-  className = '', 
-  searchTerm = '', 
-  format, 
+const CodeEditor: React.FC<CodeEditorProps> = ({
+  value,
+  onChange,
+  className = '',
+  searchTerm = '',
+  format,
   error,
   showLineNumbers = true
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
   const [containerHeight, setContainerHeight] = useState(600);
   const [activeLine, setActiveLine] = useState(0);
 
@@ -48,7 +49,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   // --- Sync Scroll ---
   const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
     setScrollTop(e.currentTarget.scrollTop);
-    
+    setScrollLeft(e.currentTarget.scrollLeft);
+
     // Sync active line based on cursor position logic could go here, 
     // but we use click/keyup for that to be more precise
   };
@@ -68,7 +70,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
   const handleKeyUp = () => updateActiveLine();
   const handleClick = () => updateActiveLine();
-  
+
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onChange(e.target.value);
     requestAnimationFrame(updateActiveLine);
@@ -112,13 +114,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   // --- Syntax Highlighting ---
   const highlightCode = (code: string) => {
     if (!code) return '';
-    
+
     // SAFETY CHECK: If line is too long, disable regex highlighting to prevent freeze
     if (code.length > 2000) {
-        return code
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;");
+      return code
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
     }
 
     const escapeHtml = (unsafe: string) => unsafe
@@ -127,7 +129,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
-      
+
     let highlighted = '';
 
     if (format === 'json') {
@@ -148,82 +150,96 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           }
         );
     } else if (format === 'csv') {
-       highlighted = code
+      highlighted = code
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(
           /("(?:""|[^"])*")|(,)|([^,\n\r]+)/g,
           (match, quoted, comma, val) => {
-             if (quoted) return `<span class="text-green-600 dark:text-green-400">${quoted}</span>`;
-             if (comma) return `<span class="text-slate-300 dark:text-slate-600 font-bold select-none">,</span>`;
-             if (val) {
-                 if (!isNaN(Number(val.trim())) && val.trim() !== '') {
-                     return `<span class="text-orange-600 dark:text-orange-400">${val}</span>`;
-                 }
-                 return `<span class="text-blue-600 dark:text-blue-400">${val}</span>`;
-             }
-             return match;
+            if (quoted) return `<span class="text-green-600 dark:text-green-400">${quoted}</span>`;
+            if (comma) return `<span class="text-slate-300 dark:text-slate-600 font-bold select-none">,</span>`;
+            if (val) {
+              if (!isNaN(Number(val.trim())) && val.trim() !== '') {
+                return `<span class="text-orange-600 dark:text-orange-400">${val}</span>`;
+              }
+              return `<span class="text-blue-600 dark:text-blue-400">${val}</span>`;
+            }
+            return match;
           }
         );
     } else {
-       // Simple fallback for YAML/XML/Others to avoid complex regex perf hit on scroll
-       highlighted = escapeHtml(code);
+      // Simple fallback for YAML/XML/Others to avoid complex regex perf hit on scroll
+      highlighted = escapeHtml(code);
     }
 
     if (searchTerm) {
-       const term = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-       const regex = new RegExp(`(${term})(?![^<]*>)`, 'gi');
-       highlighted = highlighted.replace(regex, `<span class="bg-yellow-400 text-black rounded-[1px]">$1</span>`);
+      const term = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${term})(?![^<]*>)`, 'gi');
+      highlighted = highlighted.replace(regex, `<span class="bg-yellow-400 text-black rounded-[1px]">$1</span>`);
     }
 
     return highlighted;
   };
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className={`relative flex h-full w-full bg-slate-50 dark:bg-slate-950 font-mono text-sm overflow-hidden ${className} ${error ? 'border-2 border-red-500 rounded-lg' : ''}`}
     >
-      
+
       {/* 1. Line Numbers Layer (Virtualized) */}
       {showLineNumbers && (
-        <div 
+        <div
           className="w-14 shrink-0 bg-slate-100 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-right select-none z-10 overflow-hidden"
           style={{ height: '100%' }}
         >
           <div style={{ transform: `translateY(-${scrollTop}px)`, padding: '1rem 0' }}>
-             {/* Only render line numbers that correspond to the visible lines */}
-             {visibleLines.map(({ index }) => (
-               <div 
-                 key={index}
-                 style={{ 
-                   position: 'absolute', 
-                   top: (index * LINE_HEIGHT) + 16, // +16 for padding top
-                   left: 0, 
-                   right: 12,
-                   height: LINE_HEIGHT 
-                 }}
-                 className={`leading-6 transition-colors ${
-                   index === activeLine 
-                     ? 'text-blue-600 dark:text-blue-400 font-bold' 
-                     : ''
-                 }`}
-               >
-                 {index + 1}
-               </div>
-             ))}
+            {/* Only render line numbers that correspond to the visible lines */}
+            {visibleLines.map(({ index }) => (
+              <div
+                key={index}
+                style={{
+                  position: 'absolute',
+                  top: (index * LINE_HEIGHT) + 16, // +16 for padding top
+                  left: 0,
+                  right: 12,
+                  height: LINE_HEIGHT
+                }}
+                className={`leading-6 transition-colors ${index === activeLine
+                  ? 'text-blue-600 dark:text-blue-400 font-bold'
+                  : ''
+                  }`}
+              >
+                {index + 1}
+              </div>
+            ))}
           </div>
         </div>
       )}
 
       {/* 2. Main Content Area */}
       <div className="relative flex-1 h-full overflow-hidden">
-        
+
         {/* Empty State */}
         {value.length === 0 && (
-          <div className="absolute top-4 left-4 text-slate-400 dark:text-slate-500 italic pointer-events-none z-20 select-none font-sans">
-            // This file is empty. Start typing to add content.
+          <div
+            className="absolute top-4 left-4 text-slate-400 dark:text-slate-600 font-mono text-sm pointer-events-none select-none z-20 leading-relaxed whitespace-pre"
+          >
+            {format === 'csv' ? (
+              <>
+                <span className="italic"># This file is empty. Start typing or paste CSV data.</span>
+                {"\n"}
+                <span className="italic"># Example format:</span>
+                {"\n\n"}
+                <span className="opacity-50 text-slate-500 dark:text-slate-500 italic">
+                  ID,Product Name,Category,Price,Stock,IsActive{"\n"}
+                  101,Pro Gaming Mouse,Electronics,59.99,140,true
+                </span>
+              </>
+            ) : (
+              <span className="italic opacity-75">// This file is empty. Start typing to add content.</span>
+            )}
           </div>
         )}
 
@@ -231,26 +247,28 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         <div
           aria-hidden="true"
           className="absolute inset-0 pointer-events-none whitespace-pre z-0"
-          style={{ 
-             transform: `translateY(-${scrollTop}px)`,
-             padding: '1rem' // Match textarea padding
+          style={{
+            transform: `translate(${-scrollLeft}px, ${-scrollTop}px)`,
+            padding: '1rem' // Match textarea padding
           }}
         >
-            {visibleLines.map(({ index, content }) => (
-                <div 
-                  key={index} 
-                  style={{
-                    position: 'absolute',
-                    top: (index * LINE_HEIGHT) + 16,
-                    left: 16,
-                    right: 0,
-                    height: LINE_HEIGHT
-                  }}
-                  className={`w-full ${index === activeLine ? 'bg-slate-200/50 dark:bg-slate-800/80 -mx-4 px-4' : ''}`}
-                >
-                   <span dangerouslySetInnerHTML={{ __html: highlightCode(content) || '\u200B' }} />
-                </div>
-            ))}
+          {visibleLines.map(({ index, content }) => (
+            <div
+              key={index}
+              style={{
+                position: 'absolute',
+                top: (index * LINE_HEIGHT) + 16,
+                left: 16,
+                right: 0,
+                height: LINE_HEIGHT,
+                minWidth: "100%",
+                width: "fit-content"
+              }}
+              className={`whitespace-pre ${index === activeLine ? 'bg-slate-200/50 dark:bg-slate-800/80 -mx-4 px-4' : ''}`}
+            >
+              <span dangerouslySetInnerHTML={{ __html: highlightCode(content) || '\u200B' }} />
+            </div>
+          ))}
         </div>
 
         {/* 2B. Native Textarea (Scroller) */}

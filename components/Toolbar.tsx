@@ -170,9 +170,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
   };
 
   const isEditorView = activeView === "editor" || activeView === "home";
-  
+
   const isFormatSupported = activeFile && !['yaml', 'csv'].includes(activeFile.format);
-  
+
   const isPrettyActive = activeFile?.formatStyle === 'pretty';
   const isCompactActive = activeFile?.formatStyle === 'compact';
 
@@ -196,10 +196,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
             </button>
           </Tooltip>
           <div className="flex items-center gap-3 select-none px-2 py-3">
-            <img 
-              src={appLogo} 
-              alt="Tree File Logo" 
-              className="w-8 h-8 rounded-lg shadow-md object-cover" 
+            <img
+              src={appLogo}
+              alt="Tree File Logo"
+              className="w-8 h-8 rounded-lg shadow-md object-cover"
             />
             <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500 dark:from-indigo-400 dark:to-purple-400 truncate hidden md:block">
               Tree File
@@ -214,11 +214,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <button
                   onClick={onUndo}
                   disabled={!canUndo}
-                  className={`p-1.5 rounded transition-colors ${
-                    canUndo
-                      ? "text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 shadow-sm"
-                      : "text-slate-300 dark:text-slate-700 cursor-not-allowed"
-                  }`}
+                  className={`p-1.5 rounded transition-colors ${canUndo
+                    ? "text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 shadow-sm"
+                    : "text-slate-300 dark:text-slate-700 cursor-not-allowed"
+                    }`}
                 >
                   <Undo2 size={14} />
                 </button>
@@ -227,11 +226,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <button
                   onClick={onRedo}
                   disabled={!canRedo}
-                  className={`p-1.5 rounded transition-colors ${
-                    canRedo
-                      ? "text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 shadow-sm"
-                      : "text-slate-300 dark:text-slate-700 cursor-not-allowed"
-                  }`}
+                  className={`p-1.5 rounded transition-colors ${canRedo
+                    ? "text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 shadow-sm"
+                    : "text-slate-300 dark:text-slate-700 cursor-not-allowed"
+                    }`}
                 >
                   <Redo2 size={14} />
                 </button>
@@ -241,22 +239,20 @@ const Toolbar: React.FC<ToolbarProps> = ({
             <div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-lg shrink-0 border border-slate-200 dark:border-slate-700">
               <button
                 onClick={() => setViewMode(isCsv ? "table" : "tree")}
-                className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 transition-all ${
-                  isVisualActive
-                    ? "bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-400 shadow-sm"
-                    : "text-slate-600 hover:text-slate-800 dark:hover:text-slate-300"
-                }`}
+                className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 transition-all ${isVisualActive
+                  ? "bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-400 shadow-sm"
+                  : "text-slate-600 hover:text-slate-800 dark:hover:text-slate-300"
+                  }`}
               >
                 {isCsv ? <FileSpreadsheet size={14} /> : <ListTree size={14} />}
                 <span className="hidden lg:inline">{isCsv ? "Table" : "Tree"}</span>
               </button>
               <button
                 onClick={() => setViewMode("raw")}
-                className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 transition-all ${
-                  viewMode === "raw"
-                    ? "bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-400 shadow-sm"
-                    : "text-slate-600 hover:text-slate-800 dark:hover:text-slate-300"
-                }`}
+                className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 transition-all ${viewMode === "raw"
+                  ? "bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-400 shadow-sm"
+                  : "text-slate-600 hover:text-slate-800 dark:hover:text-slate-300"
+                  }`}
               >
                 <Code size={14} /> <span className="hidden lg:inline">Raw</span>
               </button>
@@ -298,11 +294,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <Tooltip content="Clean & Sort Data" side="bottom">
                   <button
                     onClick={() => setShowToolsMenu(!showToolsMenu)}
-                    className={`p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 border z-[2100] ${
-                       activeCleanups.length 
-                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-500/20' 
-                        : 'bg-pink-50 text-pink-700 hover:bg-pink-100 hover:text-pink-800 dark:bg-pink-900/20 dark:text-pink-400 dark:hover:bg-pink-900/40 dark:hover:text-pink-300 border-pink-200 dark:border-pink-900/50'
-                    }`}
+                    className={`p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 border z-[2100] ${activeCleanups.length
+                        ? 'bg-teal-500 text-white border-teal-600 shadow-md'
+                        : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:border-slate-700'
+                      }`}
                   >
                     <Wrench size={14} />
                     <span className="hidden xl:inline text-xs font-medium">
@@ -321,19 +316,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
                       <div className="px-4 py-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 dark:border-slate-800 mb-1">
                         Cleanup Actions
                       </div>
-                      
+
                       <button
                         onClick={() => {
                           onToolSortKeys();
                           setShowToolsMenu(false);
                         }}
-                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${
-                          activeCleanups.includes('sort_asc') 
-                            ? 'bg-indigo-500 text-white' 
-                            : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'
-                        }`}
+                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${activeCleanups.includes('sort_asc')
+                          ? 'bg-teal-500 text-white'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
                       >
-                        <ArrowDownAZ size={14} className={activeCleanups.includes('sort_asc') ? 'text-white' : 'text-indigo-500'} /> 
+                        <ArrowDownAZ size={14} className={activeCleanups.includes('sort_asc') ? 'text-white' : 'text-teal-500'} />
                         Sort Keys (A-Z)
                         {activeCleanups.includes('sort_asc') && <Check size={12} className="ml-auto" />}
                       </button>
@@ -343,13 +337,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
                           onToolSortKeysDesc();
                           setShowToolsMenu(false);
                         }}
-                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${
-                          activeCleanups.includes('sort_desc') 
-                            ? 'bg-indigo-500 text-white' 
-                            : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'
-                        }`}
+                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${activeCleanups.includes('sort_desc')
+                          ? 'bg-teal-500 text-white'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
                       >
-                        <ArrowUpAZ size={14} className={activeCleanups.includes('sort_desc') ? 'text-white' : 'text-indigo-500'} /> 
+                        <ArrowUpAZ size={14} className={activeCleanups.includes('sort_desc') ? 'text-white' : 'text-teal-500'} />
                         Sort Keys (Z-A)
                         {activeCleanups.includes('sort_desc') && <Check size={12} className="ml-auto" />}
                       </button>
@@ -359,13 +352,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
                           onToolRemoveNulls();
                           setShowToolsMenu(false);
                         }}
-                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${
-                          activeCleanups.includes('remove_nulls') 
-                            ? 'bg-indigo-500 text-white' 
-                            : 'text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-900/30'
-                        }`}
+                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${activeCleanups.includes('remove_nulls')
+                          ? 'bg-teal-500 text-white'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
                       >
-                        <Trash2 size={14} className={activeCleanups.includes('remove_nulls') ? 'text-white' : 'text-rose-500'} /> 
+                        <Trash2 size={14} className={activeCleanups.includes('remove_nulls') ? 'text-white' : 'text-rose-500'} />
                         Remove Nulls
                         {activeCleanups.includes('remove_nulls') && <Check size={12} className="ml-auto" />}
                       </button>
@@ -375,13 +367,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
                           onToolTrimStrings();
                           setShowToolsMenu(false);
                         }}
-                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${
-                          activeCleanups.includes('trim_strings') 
-                            ? 'bg-indigo-500 text-white' 
-                            : 'text-slate-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-900/30'
-                        }`}
+                        className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${activeCleanups.includes('trim_strings')
+                          ? 'bg-teal-500 text-white'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
                       >
-                        <Scissors size={14} className={activeCleanups.includes('trim_strings') ? 'text-white' : 'text-amber-500'} /> 
+                        <Scissors size={14} className={activeCleanups.includes('trim_strings') ? 'text-white' : 'text-amber-500'} />
                         Trim Strings
                         {activeCleanups.includes('trim_strings') && <Check size={12} className="ml-auto" />}
                       </button>
@@ -463,11 +454,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
                     <Tooltip content="Toggle Line Numbers" side="bottom">
                       <button
                         onClick={() => setShowLineNumbers(!showLineNumbers)}
-                        className={`p-1.5 rounded transition-all ${
-                          showLineNumbers
-                            ? "bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-200 dark:border-slate-700"
-                            : "text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                        }`}
+                        className={`p-1.5 rounded transition-all ${showLineNumbers
+                          ? "bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-200 dark:border-slate-700"
+                          : "text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          }`}
                       >
                         <ListOrdered size={18} />
                       </button>
@@ -478,11 +468,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
                       <Tooltip content="Format (Pretty Print)" side="bottom">
                         <button
                           onClick={onFormat}
-                          className={`p-1.5 rounded transition-colors ${
-                            isPrettyActive 
-                              ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 shadow-sm"
-                              : "text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                          }`}
+                          className={`p-1.5 rounded transition-colors ${isPrettyActive
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 shadow-sm"
+                            : "text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            }`}
                         >
                           <AlignLeft size={18} />
                         </button>
@@ -490,11 +479,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
                       <Tooltip content="Minify (Compact)" side="bottom">
                         <button
                           onClick={onMinify}
-                          className={`p-1.5 rounded transition-colors ${
-                            isCompactActive
-                              ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 shadow-sm"
-                              : "text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                          }`}
+                          className={`p-1.5 rounded transition-colors ${isCompactActive
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 shadow-sm"
+                            : "text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            }`}
                         >
                           <Minimize size={18} />
                         </button>
@@ -542,11 +530,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
             <Tooltip content="Recent Files History" side="bottom">
               <button
                 onClick={onOpenHistory}
-                className={`p-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm ${
-                  activeView === "history"
-                    ? "bg-violet-600 text-white"
-                    : "bg-violet-50 text-violet-600 hover:bg-violet-100 dark:bg-violet-900/40 dark:text-violet-300 dark:hover:bg-violet-900/60 border border-violet-200 dark:border-violet-800"
-                }`}
+                className={`p-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm ${activeView === "history"
+                  ? "bg-violet-600 text-white"
+                  : "bg-violet-50 text-violet-600 hover:bg-violet-100 dark:bg-violet-900/40 dark:text-violet-300 dark:hover:bg-violet-900/60 border border-violet-200 dark:border-violet-800"
+                  }`}
               >
                 <History size={20} />
               </button>
@@ -555,11 +542,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
             <Tooltip content="Compare Files" side="bottom">
               <button
                 onClick={onOpenCompare}
-                className={`p-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm ${
-                  activeView === "compare"
-                    ? "bg-orange-600 text-white"
-                    : "bg-orange-50 text-orange-600 hover:bg-orange-100 dark:bg-orange-900/40 dark:text-orange-300 dark:hover:bg-orange-900/60 border border-orange-200 dark:border-orange-800"
-                }`}
+                className={`p-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm ${activeView === "compare"
+                  ? "bg-orange-600 text-white"
+                  : "bg-orange-50 text-orange-600 hover:bg-orange-100 dark:bg-orange-900/40 dark:text-orange-300 dark:hover:bg-orange-900/60 border border-orange-200 dark:border-orange-800"
+                  }`}
               >
                 <GitCompare size={20} />
               </button>

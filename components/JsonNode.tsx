@@ -8,7 +8,7 @@ interface JsonNodeProps {
   name: string | number;
   value: JsonValue;
   isLast: boolean;
-  prefix: string; 
+  prefix: string;
   settings: ViewSettings;
   path: Path;
   onUpdate?: OnUpdateValue;
@@ -24,7 +24,7 @@ const HighlightText: React.FC<{ text: string; term: string }> = ({ text, term })
   const parts = text.toString().split(new RegExp(`(${escapedTerm})`, 'gi'));
   return (
     <>
-      {parts.map((part, i) => 
+      {parts.map((part, i) =>
         part.toLowerCase() === term.toLowerCase() ? (
           <span key={i} className="bg-yellow-300 dark:bg-yellow-400 text-black font-bold px-0.5 rounded-[1px]">
             {part}
@@ -37,13 +37,13 @@ const HighlightText: React.FC<{ text: string; term: string }> = ({ text, term })
   );
 };
 
-const JsonNode: React.FC<JsonNodeProps> = ({ 
-  name, 
-  value, 
-  isLast, 
-  prefix, 
-  settings, 
-  path, 
+const JsonNode: React.FC<JsonNodeProps> = ({
+  name,
+  value,
+  isLast,
+  prefix,
+  settings,
+  path,
   onUpdate,
   searchTerm,
   depth,
@@ -52,9 +52,9 @@ const JsonNode: React.FC<JsonNodeProps> = ({
 }) => {
   const matchesSearch = useMemo(() => hasSearchMatch(value, searchTerm), [value, searchTerm]);
   const nameMatches = String(name).toLowerCase().includes(searchTerm.toLowerCase());
-  
+
   // Logic: Expand if Search Match OR if depth is within allowed level
-  const shouldExpand = searchTerm 
+  const shouldExpand = searchTerm
     ? (matchesSearch || nameMatches)
     : depth < settings.expandedLevel;
 
@@ -125,7 +125,7 @@ const JsonNode: React.FC<JsonNodeProps> = ({
     if (val === null) return <span className="text-pink-600 dark:text-pink-400 italic">null</span>;
     if (typeof val === 'boolean') return <span className="text-purple-600 dark:text-purple-400"><HighlightText text={String(val)} term={searchTerm} /></span>;
     if (typeof val === 'number') return <span className="text-orange-600 dark:text-orange-400"><HighlightText text={String(val)} term={searchTerm} /></span>;
-    if (typeof val === 'string') return <span className="text-green-700 dark:text-green-400">"<HighlightText text={val} term={searchTerm} />"</span>;
+    if (typeof val === 'string') return <span className="text-green-700 dark:text-green-400 whitespace-nowrap truncate inline-block max-w-[300px] align-bottom" title={String(val)}>"{String(val).replace(/\n/g, '\\n')}"</span>;
     return null; // Should not reach here for primitives
   };
 
@@ -139,12 +139,12 @@ const JsonNode: React.FC<JsonNodeProps> = ({
 
   return (
     <div className="font-mono text-[13px] leading-6">
-      <div 
+      <div
         className={`group flex items-center rounded-sm whitespace-pre transition-colors cursor-pointer 
-          ${isSelected 
+          ${isSelected
             ? 'bg-blue-100 dark:bg-blue-900/30' // Selected state (Context Menu Open)
-            : (matchesSearch && searchTerm) 
-              ? 'bg-yellow-100 dark:bg-slate-800/30' 
+            : (matchesSearch && searchTerm)
+              ? 'bg-yellow-100 dark:bg-slate-800/30'
               : 'hover:bg-slate-200 dark:hover:bg-slate-800/50'
           }
         `}
@@ -157,7 +157,7 @@ const JsonNode: React.FC<JsonNodeProps> = ({
             {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </span>
         ) : (
-          <span className="w-4"></span> 
+          <span className="w-4"></span>
         )}
         <span className="mr-2">
           <span className="text-blue-700 dark:text-blue-300 font-semibold">
@@ -191,7 +191,7 @@ const JsonNode: React.FC<JsonNodeProps> = ({
           </span>
         )}
         {!isEditing && isPrimitive && onUpdate && !searchTerm && (
-          <button 
+          <button
             onClick={handleEditClick}
             className="ml-2 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-600 dark:text-slate-500 dark:hover:text-blue-400 transition-opacity"
             title="Edit value"
@@ -204,7 +204,7 @@ const JsonNode: React.FC<JsonNodeProps> = ({
         <div>
           {isArray ? (
             (value as JsonValue[]).map((item, idx, arr) => (
-              <JsonNode 
+              <JsonNode
                 key={idx}
                 name={idx}
                 value={item}
@@ -221,7 +221,7 @@ const JsonNode: React.FC<JsonNodeProps> = ({
             ))
           ) : (
             Object.entries(value as object).map(([k, v], idx, arr) => (
-              <JsonNode 
+              <JsonNode
                 key={k}
                 name={k}
                 value={v}
