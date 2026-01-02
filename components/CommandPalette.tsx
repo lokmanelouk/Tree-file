@@ -173,17 +173,23 @@ const CommandItem = ({ onSelect, icon, text, shortcut, colorClass = "text-slate-
   return (
     <Command.Item
       onSelect={onSelect}
-      className="group flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 rounded-lg cursor-pointer data-[selected=true]:bg-teal-500 data-[selected=true]:text-white data-[selected=true]:shadow-md transition-all duration-200"
+      className="group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg cursor-pointer transition-all duration-200 
+      text-slate-500 dark:text-slate-400 
+      data-[selected=true]:bg-slate-100 dark:data-[selected=true]:bg-slate-800 
+      data-[selected=true]:text-slate-900 dark:data-[selected=true]:text-white"
     >
-      <div className={`p-1 rounded-md bg-slate-50 dark:bg-slate-800 group-data-[selected=true]:bg-white/20 group-data-[selected=true]:text-white transition-colors ${isActive ? 'bg-teal-100 dark:bg-teal-900/30 ring-1 ring-teal-500' : ''} ${colorClass}`}>
+      <div className={`p-1 rounded-md bg-slate-50 dark:bg-slate-800 transition-colors 
+        ${isActive ? 'bg-teal-100 dark:bg-teal-900/30 ring-1 ring-teal-500' : ''} 
+        ${colorClass} 
+        group-data-[selected=true]:text-teal-500`}>
         {icon}
       </div>
       <span className="flex-1 flex items-center gap-2">
         {text}
-        {isActive && <span className="text-[10px] font-bold bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300 px-1.5 rounded-full group-data-[selected=true]:bg-white/20 group-data-[selected=true]:text-white">ACTIVE</span>}
+        {isActive && <span className="text-[10px] font-bold bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300 px-1.5 rounded-full">ACTIVE</span>}
       </span>
       {shortcut && (
-        <span className="ml-auto text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 group-data-[selected=true]:bg-white/20 group-data-[selected=true]:text-white group-data-[selected=true]:border-white/30">
+        <span className="ml-auto text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
           {shortcut}
         </span>
       )}

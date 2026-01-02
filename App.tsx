@@ -1141,7 +1141,7 @@ function App() {
     : false;
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans transition-colors duration-200 relative">
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans transition-colors duration-200 relative">
       <CommandPalette
         open={isCmdPaletteOpen}
         onOpenChange={setIsCmdPaletteOpen}
@@ -1161,7 +1161,6 @@ function App() {
         onRemoveNulls={handleToolRemoveNulls}
         onTrimStrings={handleToolTrimStrings}
         onConvert={initiateConvert}
-        activeCleanups={activeCleanups}
       />
 
       <ConfirmModal

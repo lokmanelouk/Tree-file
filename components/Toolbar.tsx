@@ -295,8 +295,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
                   <button
                     onClick={() => setShowToolsMenu(!showToolsMenu)}
                     className={`p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 border z-[2100] ${activeCleanups.length
-                        ? 'bg-teal-500 text-white border-teal-600 shadow-md'
-                        : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:border-slate-700'
+                      ? 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-500/10 dark:text-teal-400 dark:border-teal-500/20 shadow-sm'
+                      : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:border-slate-700'
                       }`}
                   >
                     <Wrench size={14} />
@@ -323,11 +323,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
                           setShowToolsMenu(false);
                         }}
                         className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${activeCleanups.includes('sort_asc')
-                          ? 'bg-teal-500 text-white'
+                          ? 'bg-slate-100 dark:bg-white/5 text-teal-700 dark:text-teal-400 font-bold'
                           : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                           }`}
                       >
-                        <ArrowDownAZ size={14} className={activeCleanups.includes('sort_asc') ? 'text-white' : 'text-teal-500'} />
+                        <ArrowDownAZ size={14} className="text-teal-500" />
                         Sort Keys (A-Z)
                         {activeCleanups.includes('sort_asc') && <Check size={12} className="ml-auto" />}
                       </button>
@@ -338,11 +338,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
                           setShowToolsMenu(false);
                         }}
                         className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${activeCleanups.includes('sort_desc')
-                          ? 'bg-teal-500 text-white'
+                          ? 'bg-slate-100 dark:bg-white/5 text-teal-700 dark:text-teal-400 font-bold'
                           : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                           }`}
                       >
-                        <ArrowUpAZ size={14} className={activeCleanups.includes('sort_desc') ? 'text-white' : 'text-teal-500'} />
+                        <ArrowUpAZ size={14} className="text-teal-500" />
                         Sort Keys (Z-A)
                         {activeCleanups.includes('sort_desc') && <Check size={12} className="ml-auto" />}
                       </button>
@@ -353,11 +353,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
                           setShowToolsMenu(false);
                         }}
                         className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${activeCleanups.includes('remove_nulls')
-                          ? 'bg-teal-500 text-white'
+                          ? 'bg-slate-100 dark:bg-white/5 text-teal-700 dark:text-teal-400 font-bold'
                           : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                           }`}
                       >
-                        <Trash2 size={14} className={activeCleanups.includes('remove_nulls') ? 'text-white' : 'text-rose-500'} />
+                        <Trash2 size={14} className="text-rose-500" />
                         Remove Nulls
                         {activeCleanups.includes('remove_nulls') && <Check size={12} className="ml-auto" />}
                       </button>
@@ -368,11 +368,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
                           setShowToolsMenu(false);
                         }}
                         className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center gap-3 transition-colors ${activeCleanups.includes('trim_strings')
-                          ? 'bg-teal-500 text-white'
+                          ? 'bg-slate-100 dark:bg-white/5 text-teal-700 dark:text-teal-400 font-bold'
                           : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                           }`}
                       >
-                        <Scissors size={14} className={activeCleanups.includes('trim_strings') ? 'text-white' : 'text-amber-500'} />
+                        <Scissors size={14} className="text-amber-500" />
                         Trim Strings
                         {activeCleanups.includes('trim_strings') && <Check size={12} className="ml-auto" />}
                       </button>
