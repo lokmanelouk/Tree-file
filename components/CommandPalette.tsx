@@ -17,7 +17,11 @@ import {
   Trash2,
   Scissors,
   ArrowRightLeft,
-  Search
+  Search,
+  FileJson,
+  FileCode,
+  FileSpreadsheet,
+  Database
 } from 'lucide-react';
 import { FileFormat } from '../types';
 
@@ -156,10 +160,10 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
             </Command.Group>
 
             <Command.Group heading="Convert To" className="text-xs font-bold text-slate-400 mb-2 px-2 mt-2 select-none">
-              <CommandItem onSelect={() => { onConvert('json'); onOpenChange(false); }} icon={<ArrowRightLeft size={14} />} text="Convert to JSON" colorClass="text-yellow-500" />
-              <CommandItem onSelect={() => { onConvert('yaml'); onOpenChange(false); }} icon={<ArrowRightLeft size={14} />} text="Convert to YAML" colorClass="text-indigo-500" />
-              <CommandItem onSelect={() => { onConvert('xml'); onOpenChange(false); }} icon={<ArrowRightLeft size={14} />} text="Convert to XML" colorClass="text-orange-500" />
-              <CommandItem onSelect={() => { onConvert('csv'); onOpenChange(false); }} icon={<ArrowRightLeft size={14} />} text="Convert to CSV" colorClass="text-green-500" />
+              <CommandItem onSelect={() => { onConvert('json'); onOpenChange(false); }} icon={<FileJson size={14} />} text="Convert to JSON" colorClass="text-yellow-500" />
+              <CommandItem onSelect={() => { onConvert('yaml'); onOpenChange(false); }} icon={<Database size={14} />} text="Convert to YAML" colorClass="text-indigo-500" />
+              <CommandItem onSelect={() => { onConvert('xml'); onOpenChange(false); }} icon={<FileCode size={14} />} text="Convert to XML" colorClass="text-orange-500" />
+              <CommandItem onSelect={() => { onConvert('csv'); onOpenChange(false); }} icon={<FileSpreadsheet size={14} />} text="Convert to CSV" colorClass="text-green-500" />
             </Command.Group>
 
           </Command.List>
@@ -173,23 +177,29 @@ const CommandItem = ({ onSelect, icon, text, shortcut, colorClass = "text-slate-
   return (
     <Command.Item
       onSelect={onSelect}
-      className="group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg cursor-pointer transition-all duration-200 
-      text-slate-500 dark:text-slate-400 
-      data-[selected=true]:bg-slate-100 dark:data-[selected=true]:bg-slate-800 
-      data-[selected=true]:text-slate-900 dark:data-[selected=true]:text-white"
+      className={`group flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg cursor-pointer transition-all duration-200 
+      ${isActive 
+        ? 'bg-blue-600 text-white data-[selected=true]:bg-blue-700 data-[selected=true]:text-white' 
+        : 'text-slate-500 dark:text-slate-400 data-[selected=true]:bg-slate-100 dark:data-[selected=true]:bg-slate-800 data-[selected=true]:text-slate-900 dark:data-[selected=true]:text-white'
+      }`}
     >
-      <div className={`p-1 rounded-md bg-slate-50 dark:bg-slate-800 transition-colors 
-        ${isActive ? 'bg-teal-100 dark:bg-teal-900/30 ring-1 ring-teal-500' : ''} 
-        ${colorClass} 
-        group-data-[selected=true]:text-teal-500`}>
+      <div className={`p-1 rounded-md transition-colors 
+        ${isActive 
+          ? 'bg-white/20 text-white group-data-[selected=true]:text-white' 
+          : `bg-slate-50 dark:bg-slate-800 ${colorClass} group-data-[selected=true]:text-teal-500`
+        } `}>
         {icon}
       </div>
       <span className="flex-1 flex items-center gap-2">
         {text}
-        {isActive && <span className="text-[10px] font-bold bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300 px-1.5 rounded-full">ACTIVE</span>}
+        {isActive && <span className="text-[10px] font-bold bg-white/20 text-white px-1.5 rounded-full">ACTIVE</span>}
       </span>
       {shortcut && (
-        <span className="ml-auto text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+        <span className={`ml-auto text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border 
+          ${isActive 
+            ? 'bg-white/20 text-white border-white/20' 
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+          }`}>
           {shortcut}
         </span>
       )}
