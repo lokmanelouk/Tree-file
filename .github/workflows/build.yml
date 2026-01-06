@@ -3,7 +3,7 @@ name: Build/Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   release:
@@ -11,16 +11,16 @@ jobs:
 
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest, macos-latest, ubuntu-latest]
 
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v4  # <-- Updated to v4
+        uses: actions/checkout@v4 # <-- Updated to v4
 
       - name: Install Node.js
-        uses: actions/setup-node@v4  # <-- Updated to v4
+        uses: actions/setup-node@v4 # <-- Updated to v4
         with:
-          node-version: 20  # Updated to Node 20 (current standard)
+          node-version: 20 # Updated to Node 20 (current standard)
 
       - name: Install Dependencies
         run: npm install
@@ -36,10 +36,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4  # <-- CRITICAL FIX: Updated to v4
+        uses: actions/upload-artifact@v4 # <-- CRITICAL FIX: Updated to v4
         with:
           name: release-artifacts-${{ matrix.os }}
           path: |
             release/*.exe
             release/*.dmg
             release/*.zip
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
