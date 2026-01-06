@@ -816,8 +816,44 @@ function App() {
     return data;
   };
 
-  const handleToolSortKeys = () => applyJsonTool((d) => sortJson(d, 'asc'), 'Sorting Keys (A-Z)...', 'sort_asc', ['sort_desc']);
-  const handleToolSortKeysDesc = () => applyJsonTool((d) => sortJson(d, 'desc'), 'Sorting Keys (Z-A)...', 'sort_desc', ['sort_asc']);
+const handleToolSortKeys = () => applyJsonTool((data) => {
+    // 1. Table Mode: If it's a List/CSV, sort the ROWS by the first column
+    if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && data[0] !== null) {
+      const firstKey = Object.keys(data[0] as JsonObject)[0];
+      return [...data].sort((a, b) => {
+        const valA = (a as JsonObject)[firstKey];
+        const valB = (b as JsonObject)[firstKey];
+        
+        // Check if they are numbers
+        const numA = Number(valA);
+        const numB = Number(valB);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        
+        // Otherwise sort as text
+        return String(valA).localeCompare(String(valB));
+      });
+    }
+    // 2. Tree Mode: Sort Keys Alphabetically (Original logic)
+    return sortJson(data, 'asc');
+  }, 'Sorting Data (A-Z)...', 'sort_asc', ['sort_desc']);
+
+  const handleToolSortKeysDesc = () => applyJsonTool((data) => {
+    // 1. Table Mode: Sort ROWS Descending
+    if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && data[0] !== null) {
+      const firstKey = Object.keys(data[0] as JsonObject)[0];
+      return [...data].sort((a, b) => {
+        const valA = (a as JsonObject)[firstKey];
+        const valB = (b as JsonObject)[firstKey];
+        
+        const numA = Number(valA);
+        const numB = Number(valB);
+        if (!isNaN(numA) && !isNaN(numB)) return numB - numA;
+        return String(valB).localeCompare(String(valA));
+      });
+    }
+    // 2. Tree Mode: Sort KEYS Descending (Original logic)
+    return sortJson(data, 'desc');
+  }, 'Sorting Data (Z-A)...', 'sort_desc', ['sort_asc']);
   const handleToolRemoveNulls = () => applyJsonTool(recursiveRemoveNulls, 'Removing Nulls...', 'remove_nulls');
   const handleToolTrimStrings = () => applyJsonTool(recursiveTrimStrings, 'Trimming Strings...', 'trim_strings');
 

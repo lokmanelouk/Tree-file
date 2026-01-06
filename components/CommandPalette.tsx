@@ -16,7 +16,6 @@ import {
   ArrowUpAZ,
   Trash2,
   Scissors,
-  ArrowRightLeft,
   Search,
   FileJson,
   FileCode,
